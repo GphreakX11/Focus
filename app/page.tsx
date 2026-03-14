@@ -698,12 +698,15 @@ export default function Home() {
                   autoFocus
                   className="flex-1 bg-transparent border-b-2 border-white/50 outline-none text-lg sm:text-2xl font-sans font-medium text-white min-w-0"
                 />
-                <input
-                  type="date"
-                  value={editingTodoDate}
-                  onChange={(e) => setEditingTodoDate(e.target.value)}
-                  className="bg-white/10 border-none rounded-lg px-2 py-1 text-xs text-white outline-none focus:bg-white/20 transition-all font-sans"
-                />
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] uppercase font-bold text-white/40 ml-1">Due Date:</span>
+                  <input
+                    type="date"
+                    value={editingTodoDate}
+                    onChange={(e) => setEditingTodoDate(e.target.value)}
+                    className="bg-white/10 border-none rounded-lg px-2 py-2 text-sm text-white outline-none focus:bg-white/20 transition-all font-sans min-h-[40px]"
+                  />
+                </div>
               </div>
             ) : (
               <button 
@@ -722,11 +725,11 @@ export default function Home() {
               </button>
             )}
             {todo.dueDate && editingTodoId !== todo.id && (
-              <span className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold tracking-tight shrink-0 transition-all flex items-center gap-1 ${todo.dueDate === getTodayStr() ? 'bg-red-500/30 text-red-500 border border-red-500/50 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'bg-white/5 text-white/40 border border-white/10'}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <span className={`px-2 py-1 rounded-lg text-xs sm:text-xs font-bold tracking-tight shrink-0 transition-all flex items-center gap-1.5 ${todo.dueDate === getTodayStr() ? 'bg-red-500 text-white border border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-white/10 text-white/90 border border-white/20'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                {todo.dueDate === getTodayStr() ? 'Due Today' : todo.dueDate}
+                {todo.dueDate === getTodayStr() ? 'Today' : todo.dueDate}
               </span>
             )}
             {activeTaskId === todo.id && isRunning && (
