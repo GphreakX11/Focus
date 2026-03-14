@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body {
+  background-color: #0f172a; /* slate-900 */
+  overscroll-behavior-y: none;
+  width: 100%;
+  height: 100%;
+}
+
+/* Custom checkbox with SVG tick — moved from JSX to avoid Turbopack base64 parsing bug */
+.check-input {
+  appearance: none;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.check-input:checked {
+  background-color: rgb(34 197 94);
+  border-color: rgb(34 197 94);
+}
+.check-input::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwb2x5bGluZSBwb2ludHM9IjIwIDYgOSAxNyA0IDEyIi8+PC9zdmc+');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 60%;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.check-input:checked::after {
+  opacity: 1;
+}
+@layer utilities {
+  .animate-slide-down {
+    animation: slide-down 0.2s ease-out;
+  }
+
+  @keyframes slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.2s cubic-bezier(0, 0, 0.2, 1);
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+}
