@@ -782,7 +782,7 @@ export default function Home() {
                   if (activeTaskId !== todo.id && !isRunning) toggleTimer();
                   setSelectedTodoId(null);
                 }}
-                className={`p-3 rounded-xl transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-white/40 hover:text-indigo-300 hover:bg-indigo-500/10'}`}
+                className={`p-3 rounded-xl transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-indigo-400 hover:bg-indigo-500/10'}`}
                 title={activeTaskId === todo.id ? 'Stop Focus' : 'Start Focus'}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -793,7 +793,7 @@ export default function Home() {
               {/* Star Icon Action */}
               <button 
                 onClick={() => handleToggleStar(todo.id)} 
-                className={`p-3 rounded-xl transition-all active:scale-90 ${todo.important ? 'text-amber-400 bg-amber-400/10 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : 'text-white/40 hover:text-amber-300 hover:bg-amber-400/10'}`}
+                className={`p-3 rounded-xl transition-all active:scale-90 ${todo.important ? 'text-amber-400 bg-amber-400/10 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : 'text-amber-400/60 hover:text-amber-400 hover:bg-amber-400/10'}`}
                 title={todo.important ? 'Remove Priority' : 'Mark Priority'}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
@@ -813,7 +813,7 @@ export default function Home() {
               {/* Rename Icon Action */}
               <button 
                 onClick={() => { setEditingTodoId(todo.id); setEditingTodoText(todo.text); setEditingTodoDate(todo.dueDate || ''); setSelectedTodoId(null); }} 
-                className="p-3 rounded-xl transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
+                className="p-3 rounded-xl transition-all active:scale-90 text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-500/10"
                 title="Rename Task"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -877,7 +877,7 @@ export default function Home() {
               {/* Delete Icon Action */}
               <button 
                 onClick={() => { setTodos(prev => prev.filter(t => t.id !== todo.id)); setSelectedTodoId(null); }} 
-                className="p-3 rounded-xl transition-all active:scale-90 text-white/20 hover:text-red-400 hover:bg-red-500/10"
+                className="p-3 rounded-xl transition-all active:scale-90 text-red-500/40 hover:text-red-500 hover:bg-red-500/10"
                 title="Delete forever"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
