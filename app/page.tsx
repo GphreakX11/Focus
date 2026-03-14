@@ -807,7 +807,7 @@ export default function Home() {
                 className={`p-3 rounded-xl transition-all active:scale-90 ${todo.backburner ? 'text-orange-400 bg-orange-400/10 shadow-[0_0_15px_rgba(251,146,60,0.3)]' : 'text-white/40 hover:text-orange-400 hover:bg-orange-500/10'}`}
                 title={todo.backburner ? 'Move to Today' : 'Move to Later'}
               >
-                <div className="text-xl leading-none grayscale-[0.5] hover:grayscale-0 transition-all">🔥</div>
+                <div className="text-xl leading-none grayscale-[0.5] hover:grayscale-0 transition-all font-bold">B</div>
               </button>
 
               {/* Rename Icon Action */}
@@ -1216,7 +1216,7 @@ export default function Home() {
                 : 'bg-white/5 text-white/30 hover:text-white/50 border border-white/5'
             }`}
           >
-            🔥 BACKBURNER {todos.filter(t => t.backburner).length > 0 && `(${todos.filter(t => t.backburner).length})`}
+            BACKBURNER {todos.filter(t => t.backburner).length > 0 && `(${todos.filter(t => t.backburner).length})`}
           </button>
         </div>
       </div>
