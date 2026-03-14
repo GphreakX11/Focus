@@ -58,7 +58,11 @@ export default function Home() {
   // Prevent hydration mismatch
   const [mounted, setMounted] = useState(false);
 
-  const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const getTodayStr = () => {
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+    console.log('Due Date System Active. Today is:', today);
+    return today;
+  };
 
   // DND Reminder State
   const [showDndReminder, setShowDndReminder] = useState(false);
@@ -718,7 +722,10 @@ export default function Home() {
               </button>
             )}
             {todo.dueDate && editingTodoId !== todo.id && (
-              <span className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold tracking-tight shrink-0 transition-all ${todo.dueDate === getTodayStr() ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-white/5 text-white/40 border border-white/10'}`}>
+              <span className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold tracking-tight shrink-0 transition-all flex items-center gap-1 ${todo.dueDate === getTodayStr() ? 'bg-red-500/30 text-red-500 border border-red-500/50 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'bg-white/5 text-white/40 border border-white/10'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
                 {todo.dueDate === getTodayStr() ? 'Due Today' : todo.dueDate}
               </span>
             )}
