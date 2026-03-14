@@ -6,11 +6,20 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
-    const { transcript, userName } = await req.json();
+    const body = await req.json();
+    const { transcript, userName } = body;
+    
+    console.log('AI API Request:', { hasTranscript: !!transcript, userName });
 
     if (!transcript) {
+      console.error('Missing transcript');
       return new Response('No transcript provided', { status: 400 });
     }
+
+    console.log('API Keys Detected:', { 
+      GOOGLE_GEN_AI: !!process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+      GEMINI: !!process.env.GEMINI_API_KEY 
+    });
 
     const result = await streamText({
       model: google('gemini-1.5-flash'),

@@ -108,6 +108,10 @@ export default function Home() {
       setAnalysisHistory(updatedHistory);
       localStorage.setItem('focus_ai_history', JSON.stringify(updatedHistory));
       setTranscriptInput(''); // Clear input after success
+    },
+    onError: (err) => {
+      console.error('AI Completion Error:', err);
+      alert(`AI Error: ${err.message || 'Failed to connect to assistant'}`);
     }
   });
 
@@ -1003,9 +1007,12 @@ export default function Home() {
 
       {/* AI Assistant Toggle Button */}
       <button 
-        onClick={() => setIsAiDrawerOpen(!isAiDrawerOpen)}
+        onClick={() => {
+          console.log('AI Sparkle Clicked');
+          setIsAiDrawerOpen(!isAiDrawerOpen);
+        }}
         style={{ top: 'calc(1.5rem + var(--safe-top))' }}
-        className={`fixed right-6 z-[100] p-3 rounded-2xl text-indigo-400/80 hover:text-indigo-300 hover:bg-indigo-500/10 active:scale-90 transition-all shadow-lg backdrop-blur-md border border-indigo-500/20 ${isAiDrawerOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`fixed right-6 z-[130] p-3 rounded-2xl text-indigo-400 hover:text-indigo-300 bg-slate-900/80 hover:bg-slate-800 backdrop-blur-xl border border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.3)] active:scale-90 transition-all ${isAiDrawerOpen ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'}`}
         title="AI Meeting Assistant"
       >
         <Sparkles className="h-8 w-8 animate-pulse" />
