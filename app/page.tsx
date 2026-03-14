@@ -34,7 +34,7 @@ const DEFAULT_HABITS: Habit[] = [];
 const getTodayStr = () => new Date().toLocaleDateString('en-CA');
 
 export default function Home() {
-  const [hour, setHour] = useState<number | null>(null);
+  const [hour, setHour] = useState(null as number | null);
   
   // App State (To-Dos)
   const [todos, setTodos] = useState<Todo[]>([]);
@@ -46,7 +46,7 @@ export default function Home() {
   const [newHabitText, setNewHabitText] = useState('');
 
   // Editing State
-  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [editingHabitId, setEditingHabitId] = useState(null as string | null);
   const [editingHabitText, setEditingHabitText] = useState('');
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTodoText, setEditingTodoText] = useState('');
@@ -67,7 +67,7 @@ export default function Home() {
   // Prevent hydration mismatch
   const [mounted, setMounted] = useState(false);
 
-  const getTodayStr = () => {
+  const getTodayStrWithLog = () => {
     const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
     console.log('Due Date System Active. Today is:', today);
     return today;
@@ -77,16 +77,16 @@ export default function Home() {
   const [showDndReminder, setShowDndReminder] = useState(false);
 
   // Drag and Drop State
-  const [draggedTodoIndex, setDraggedTodoIndex] = useState<number | null>(null);
-  const [dragOverTodoIndex, setDragOverTodoIndex] = useState<number | null>(null);
+  const [draggedTodoIndex, setDraggedTodoIndex] = useState(null as number | null);
+  const [dragOverTodoIndex, setDragOverTodoIndex] = useState(null as number | null);
 
   // Swipe State (sidebar only)
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartX, setTouchStartX] = useState(null as number | null);
 
   // Todo view tab
   const [todoView, setTodoView] = useState<'today' | 'active' | 'backburner'>('today');
-  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [selectedTodoId, setSelectedTodoId] = useState(null as string | null);
+  const [activeTaskId, setActiveTaskId] = useState(null as string | null);
 
   // AI Meeting Assistant State
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
@@ -157,7 +157,7 @@ export default function Home() {
   };
 
   // Standby / Media Session State
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [wakeLock, setWakeLock] = useState<any>(null);
 
   // Load from localStorage on mount
@@ -217,7 +217,7 @@ export default function Home() {
     }
     if (savedHabits) {
       try {
-        const parsed = JSON.parse(savedHabits);
+        const parsed: any[] = JSON.parse(savedHabits);
         // Map old habits (+/-) to new schema if they don't have completed flag
         const migrated = parsed.filter((h: any) => h.score !== undefined).map((h: any) => ({
           id: h.id, text: h.text, completed: false, lastCompletedDate: ''
@@ -1382,7 +1382,7 @@ export default function Home() {
                   id="ai-file-upload" 
                   className="hidden" 
                   accept=".txt,.csv"
-                  onChange={handleFileUpload}
+                  onChange={(e: any) => handleFileUpload(e)}
                 />
                 <label 
                   htmlFor="ai-file-upload"
