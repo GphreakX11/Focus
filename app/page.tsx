@@ -685,29 +685,48 @@ export default function Home() {
               className="check-input w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 shrink-0"
             />
             {editingTodoId === todo.id ? (
-              <div className="flex-1 flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={editingTodoText}
-                  onChange={(e) => setEditingTodoText(e.target.value)}
-                  onBlur={() => handleSaveTodo(todo.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveTodo(todo.id);
-                    if (e.key === 'Escape') setEditingTodoId(null);
-                  }}
-                  autoFocus
-                  className="flex-1 bg-transparent border-b-2 border-white/50 outline-none text-lg sm:text-2xl font-sans font-medium text-white min-w-0"
-                />
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-bold text-white/40 ml-1">Due Date:</span>
+                <div className="flex-1 flex flex-col gap-3">
                   <input
-                    type="date"
-                    value={editingTodoDate}
-                    onChange={(e) => setEditingTodoDate(e.target.value)}
-                    className="bg-white/10 border-none rounded-lg px-2 py-2 text-sm text-white outline-none focus:bg-white/20 transition-all font-sans min-h-[40px]"
+                    type="text"
+                    value={editingTodoText}
+                    onChange={(e) => setEditingTodoText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveTodo(todo.id);
+                      if (e.key === 'Escape') setEditingTodoId(null);
+                    }}
+                    autoFocus
+                    className="flex-1 bg-transparent border-b-2 border-white/50 outline-none text-lg sm:text-2xl font-sans font-medium text-white min-w-0"
                   />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase font-bold text-white/40 ml-1">Due Date:</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={editingTodoDate}
+                        onChange={(e) => setEditingTodoDate(e.target.value)}
+                        className="bg-white/10 border-none rounded-lg px-2 py-2 text-sm text-white outline-none focus:bg-white/20 transition-all font-sans flex-1 min-h-[44px]"
+                      />
+                      <button 
+                        onClick={() => handleSaveTodo(todo.id)}
+                        className="p-2 rounded-xl bg-indigo-500 text-white shadow-lg active:scale-90 transition-all"
+                        title="Save Changes"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                      <button 
+                        onClick={() => setEditingTodoId(null)}
+                        className="p-2 rounded-xl bg-white/10 text-white/50 hover:text-white active:scale-90 transition-all"
+                        title="Cancel"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
             ) : (
               <button 
                 onClick={() => {
