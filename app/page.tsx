@@ -37,18 +37,18 @@ export default function Home() {
   const [hour, setHour] = useState(null as number | null);
   
   // App State (To-Dos)
-  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todos, setTodos] = useState([]);
   const [newTodoText, setNewTodoText] = useState('');
   
   // Habitica State
-  const [habits, setHabits] = useState<Habit[]>([]);
+  const [habits, setHabits] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [newHabitText, setNewHabitText] = useState('');
 
   // Editing State
   const [editingHabitId, setEditingHabitId] = useState(null as string | null);
   const [editingHabitText, setEditingHabitText] = useState('');
-  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editingTodoId, setEditingTodoId] = useState(null);
   const [editingTodoText, setEditingTodoText] = useState('');
   const [editingTodoDate, setEditingTodoDate] = useState('');
 
@@ -96,7 +96,7 @@ export default function Home() {
   
   const { completion, complete, isLoading: isAnalyzing, setCompletion } = useCompletion({
     api: '/api/analyze-transcript',
-    onFinish: (_prompt: string, completion: string) => {
+    onFinish: (_prompt, completion) => {
       // Save to history when finished
       const newEntry: AnalysisHistory = {
         id: Date.now().toString(),
@@ -157,8 +157,8 @@ export default function Home() {
   };
 
   // Standby / Media Session State
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [wakeLock, setWakeLock] = useState<any>(null);
+  const audioRef = useRef(null);
+  const [wakeLock, setWakeLock] = useState(null);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -197,7 +197,7 @@ export default function Home() {
     if (savedTodos) {
       let parsedTodos = JSON.parse(savedTodos);
       if (shouldPurge) {
-        parsedTodos = parsedTodos.filter((t: any) => !t.completed);
+        parsedTodos = parsedTodos.filter((t) => !t.completed);
       }
       setTodos(parsedTodos);
     } else {
@@ -217,13 +217,13 @@ export default function Home() {
     }
     if (savedHabits) {
       try {
-        const parsed: any[] = JSON.parse(savedHabits);
+        const parsed = JSON.parse(savedHabits);
         // Map old habits (+/-) to new schema if they don't have completed flag
-        const migrated = parsed.filter((h: any) => h.score !== undefined).map((h: any) => ({
+        const migrated = parsed.filter((h) => h.score !== undefined).map((h) => ({
           id: h.id, text: h.text, completed: false, lastCompletedDate: ''
         }));
         // If it's already the new schema (e.g. page reload after this update), just use it
-        const current = parsed.filter((h: any) => h.score === undefined);
+        const current = parsed.filter((h) => h.score === undefined);
         initialHabits = [...initialHabits, ...migrated, ...current];
       } catch (e) {}
     }
@@ -1382,7 +1382,7 @@ export default function Home() {
                   id="ai-file-upload" 
                   className="hidden" 
                   accept=".txt,.csv"
-                  onChange={(e: any) => handleFileUpload(e)}
+                  onChange={(e) => handleFileUpload(e)}
                 />
                 <label 
                   htmlFor="ai-file-upload"
