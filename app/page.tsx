@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useCompletion } from '@ai-sdk/react';
+import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw } from 'lucide-react';
 
 type Habit = {
   id: string;
@@ -18,6 +20,13 @@ type Todo = {
   activeTab?: boolean;  // true = in the "Active" middle tab
   activeSince?: string; // ISO date string (YYYY-MM-DD) when moved to Active
   dueDate?: string;     // ISO date string (YYYY-MM-DD)
+};
+
+type AnalysisHistory = {
+  id: string;
+  date: string;
+  title: string;
+  content: string;
 };
 
 const DEFAULT_HABITS: Habit[] = [];
@@ -78,6 +87,70 @@ export default function Home() {
   const [todoView, setTodoView] = useState<'today' | 'active' | 'backburner'>('today');
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+
+  // AI Meeting Assistant State
+  const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
+  const [userName, setUserName] = useState('');
+  const [analysisHistory, setAnalysisHistory] = useState<AnalysisHistory[]>([]);
+  const [transcriptInput, setTranscriptInput] = useState('');
+  
+  const { completion, complete, isLoading: isAnalyzing, setCompletion } = useCompletion({
+    api: '/api/analyze-transcript',
+    onFinish: (_prompt: string, completion: string) => {
+      // Save to history when finished
+      const newEntry: AnalysisHistory = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleString(),
+        title: transcriptInput.slice(0, 30) + (transcriptInput.length > 30 ? '...' : ''),
+        content: completion
+      };
+      const updatedHistory = [newEntry, ...analysisHistory];
+      setAnalysisHistory(updatedHistory);
+      localStorage.setItem('focus_ai_history', JSON.stringify(updatedHistory));
+      setTranscriptInput(''); // Clear input after success
+    }
+  });
+
+  const handleAnalyze = async () => {
+    if (!transcriptInput.trim() || isAnalyzing) return;
+    setCompletion(''); // Reset completion for new run
+    await complete(transcriptInput, { body: { userName } });
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.type !== 'text/plain' && !file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
+      alert('Please upload a .txt or .csv file.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setTranscriptInput(content);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleAiDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleAiDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setTranscriptInput(event.target?.result as string);
+      };
+      reader.readAsText(file);
+    }
+  };
 
   // Standby / Media Session State
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -928,6 +1001,16 @@ export default function Home() {
         </svg>
       </button>
 
+      {/* AI Assistant Toggle Button */}
+      <button 
+        onClick={() => setIsAiDrawerOpen(!isAiDrawerOpen)}
+        style={{ top: 'calc(1.5rem + var(--safe-top))' }}
+        className={`fixed right-6 z-[100] p-3 rounded-2xl text-indigo-400/80 hover:text-indigo-300 hover:bg-indigo-500/10 active:scale-90 transition-all shadow-lg backdrop-blur-md border border-indigo-500/20 ${isAiDrawerOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        title="AI Meeting Assistant"
+      >
+        <Sparkles className="h-8 w-8 animate-pulse" />
+      </button>
+
       {/* Main App Overlay (Invisible swipe area / Dimmed click area) */}
       {/* Main App Overlay (Invisible swipe area / Dimmed click area) */}
       {isSidebarOpen && (
@@ -1226,6 +1309,180 @@ export default function Home() {
         <div className="w-full py-4 flex flex-col items-center relative overflow-hidden">
           {/* List of To-Dos */}
           {todoListSection}
+        </div>
+      </div>
+      {/* AI Assistant Side Drawer */}
+      {isAiDrawerOpen && (
+        <div 
+          className="fixed inset-0 z-[110] bg-slate-950/60 backdrop-blur-md cursor-pointer transition-opacity duration-500"
+          onClick={() => setIsAiDrawerOpen(false)}
+        />
+      )}
+
+      <div 
+        style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
+        className={`fixed top-0 right-0 h-[100dvh] w-96 max-w-[90vw] bg-slate-950/95 backdrop-blur-3xl border-l border-white/10 shadow-2xl z-[120] transform transition-transform duration-500 ease-out flex flex-col pb-8 px-6 overflow-y-auto ${isAiDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Sparkles className="text-indigo-400" />
+            AI Assistant
+          </h2>
+          <button 
+            onClick={() => setIsAiDrawerOpen(false)}
+            className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 active:scale-90 transition-all font-sans"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-6 font-sans">
+          {/* User Name Input */}
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 ml-1">Your Name (for context)</label>
+            <div className="relative group">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20 group-focus-within:text-indigo-400 transition-colors" />
+              <input 
+                type="text"
+                value={userName}
+                onChange={(e) => {
+                  setUserName(e.target.value);
+                  localStorage.setItem('focus_user_name', e.target.value);
+                }}
+                placeholder="How should Gemini address you?"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-10 pr-4 text-white placeholder:text-white/20 outline-none focus:border-indigo-500/50 focus:bg-white/10 transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Transcript Area */}
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 ml-1">Meeting Transcript</label>
+            <div 
+              onDragOver={handleAiDragOver}
+              onDrop={handleAiDrop}
+              className="relative flex flex-col gap-3"
+            >
+              <textarea 
+                value={transcriptInput}
+                onChange={(e) => setTranscriptInput(e.target.value)}
+                placeholder="Paste transcript or drag .txt/.csv here..."
+                className="w-full h-48 bg-white/5 border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/20 outline-none focus:border-indigo-500/50 focus:bg-white/10 transition-all resize-none text-sm"
+              />
+              <div className="flex items-center gap-2">
+                <input 
+                  type="file" 
+                  id="ai-file-upload" 
+                  className="hidden" 
+                  accept=".txt,.csv"
+                  onChange={handleFileUpload}
+                />
+                <label 
+                  htmlFor="ai-file-upload"
+                  className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-white/10 rounded-2xl text-white/40 hover:text-white hover:border-indigo-500/50 hover:bg-white/5 transition-all cursor-pointer text-xs"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Transcript
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <button 
+            onClick={handleAnalyze}
+            disabled={!transcriptInput.trim() || isAnalyzing}
+            className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${!transcriptInput.trim() || isAnalyzing ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 active:scale-[0.98] hover:bg-indigo-400'}`}
+          >
+            {isAnalyzing ? (
+              <>
+                <RotateCcw className="h-5 w-5 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-5 w-5" />
+                Analyze Meeting
+              </>
+            )}
+          </button>
+
+          {/* Real-time Result */}
+          {(completion || isAnalyzing) && (
+            <div className="flex flex-col gap-2 animate-slide-up">
+              <label className="text-[10px] uppercase font-bold tracking-widest text-indigo-400 ml-1">Latest Analysis</label>
+              <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-5 text-white/90 text-sm whitespace-pre-wrap leading-relaxed">
+                {completion}
+                {isAnalyzing && !completion && (
+                  <div className="flex gap-1 items-center opacity-50">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.3s]"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.15s]"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-bounce"></div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* History List */}
+          <div className="flex flex-col gap-4 mt-4 mb-10">
+            <div className="flex items-center justify-between px-1">
+              <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 flex items-center gap-2">
+                <History className="h-3 w-3" />
+                Past Analyses
+              </label>
+              {analysisHistory.length > 0 && (
+                <button 
+                  onClick={() => { setAnalysisHistory([]); localStorage.removeItem('focus_ai_history'); }}
+                  className="text-[9px] uppercase font-bold text-red-400/60 hover:text-red-400 transition-colors"
+                >
+                  Clear History
+                </button>
+              )}
+            </div>
+            
+            {analysisHistory.length === 0 ? (
+              <div className="text-center py-10 text-white/10 flex flex-col items-center gap-2 grayscale">
+                <FileText className="h-10 w-10 opacity-20" />
+                <span className="text-xs font-medium">No history yet</span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {analysisHistory.map(item => (
+                  <div 
+                    key={item.id}
+                    className="group bg-white/5 border border-white/5 rounded-2xl p-4 hover:bg-white/10 hover:border-white/10 transition-all cursor-default"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold text-white/20">{item.date}</span>
+                      <button 
+                         onClick={() => {
+                           const updated = analysisHistory.filter(h => h.id !== item.id);
+                           setAnalysisHistory(updated);
+                           localStorage.setItem('focus_ai_history', JSON.stringify(updated));
+                         }}
+                         className="opacity-0 group-hover:opacity-100 p-1 text-white/20 hover:text-red-400 transition-all"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <h3 className="text-xs font-bold text-white/80 mb-2 truncate pr-4">{item.title}</h3>
+                    <p className="text-[11px] text-white/40 line-clamp-3 leading-relaxed font-sans">
+                      {item.content}
+                    </p>
+                    <button 
+                      onClick={() => {
+                        setTranscriptInput(""); 
+                        setCompletion(item.content);
+                      }}
+                      className="mt-3 text-[10px] font-bold text-indigo-400/80 hover:text-indigo-400 flex items-center gap-1"
+                    >
+                      View Full Analysis →
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </main>
