@@ -109,6 +109,12 @@ export default function Home() {
         title = titleMatch[1].trim();
         cleanContent = completion.replace(/\[TITLE\].*?(\n|$)/, '').trim();
       }
+      
+      // Fallback if the clean content evaluates to empty
+      if (!cleanContent) {
+        cleanContent = completion || "No content returned from AI.";
+      }
+      
       setCompletion(cleanContent);
 
       // Save to history when finished
@@ -202,17 +208,12 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
     
-    // Register PWA Service Worker & Force Clear Old Caches to fix White Screen
+    // Completely Disable Service Worker (Fixes iOS Safari White Screen PWA Bug)
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for(let registration of registrations) {
-            registration.unregister();
-          }
-        });
-        navigator.serviceWorker.register('/sw.js').catch(function(err) {
-          console.error('ServiceWorker registration failed: ', err);
-        });
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister();
+        }
       });
     }
 
@@ -1575,7 +1576,7 @@ export default function Home() {
             </div>
             
             <div className="p-6 overflow-y-auto font-sans text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
-              {viewingAnalysis.content}
+              {viewingAnalysis.content || <span className="text-white/40 italic">Waiting for analysis content or content is empty...</span>}
             </div>
           </div>
         </div>
