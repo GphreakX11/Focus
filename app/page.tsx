@@ -701,7 +701,15 @@ export default function Home() {
     if (!textToSubmit) return;
     
     setTodos(prev => {
-      const newTodo = { id: Date.now().toString(), text: textToSubmit, completed: false, important: false, backburner: todoView === 'backburner' };
+      const newTodo = { 
+        id: Date.now().toString(), 
+        text: textToSubmit, 
+        completed: false, 
+        important: false, 
+        backburner: todoView === 'backburner',
+        activeTab: todoView === 'active',
+        ...(todoView === 'active' ? { activeSince: new Date().toLocaleDateString('en-CA') } : {})
+      };
       const firstCompletedIndex = prev.findIndex(t => t.completed);
       
       let insertedList = [];
