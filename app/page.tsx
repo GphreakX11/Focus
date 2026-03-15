@@ -440,6 +440,12 @@ export default function Home() {
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   // Timer logic
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -517,13 +523,6 @@ export default function Home() {
     return 'from-slate-900 to-indigo-950';
   };
 
-
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
 
   const getTimerColorClass = () => {
     if (timerMode === 'break' || !isRunning) return 'text-white/80';
