@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       prompt: finalTranscript,
     });
 
-    return result.toDataStreamResponse();
+    return result.toTextStreamResponse();
   } catch (error: any) {
     console.error('AI Analysis Error:', error);
     const errorMessage = error?.message || 'Unknown error occurred';
