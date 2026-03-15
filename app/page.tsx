@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useCompletion } from '@ai-sdk/react';
 import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw } from 'lucide-react';
 
 type Habit = {
@@ -98,21 +97,41 @@ export default function Home() {
   const [selectedItemsToImport, setSelectedItemsToImport] = useState(new Set() as Set<number>);
   const [viewingAnalysis, setViewingAnalysis] = useState<AnalysisHistory | null>(null);
   
-  const { completion, complete, isLoading: isAnalyzing, setCompletion } = useCompletion({
-    api: '/api/analyze-transcript',
-    onFinish: (_prompt, completion) => {
+  const [completion, setCompletion] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleAnalyze = async () => {
+    if (!transcriptInput.trim() || isAnalyzing) return;
+    
+    setIsAnalyzing(true);
+    setCompletion(''); // Reset completion for new run
+
+    try {
+      const response = await fetch('/api/analyze-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: transcriptInput, userName })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to connect to assistant');
+      }
+
+      const fullCompletion = await response.text();
+
       // Extract Title
       let title = "Meeting Analysis";
-      let cleanContent = completion;
-      const titleMatch = completion.match(/\[TITLE\](.*?)(?=\n|$)/);
+      let cleanContent = fullCompletion;
+      const titleMatch = fullCompletion.match(/\[TITLE\](.*?)(?=\n|$)/);
       if (titleMatch && titleMatch[1]) {
         title = titleMatch[1].trim();
-        cleanContent = completion.replace(/\[TITLE\].*?(\n|$)/, '').trim();
+        cleanContent = fullCompletion.replace(/\[TITLE\].*?(\n|$)/, '').trim();
       }
       
       // Fallback if the clean content evaluates to empty
       if (!cleanContent) {
-        cleanContent = completion || "No content returned from AI.";
+        cleanContent = fullCompletion || "No content returned from AI.";
       }
       
       setCompletion(cleanContent);
@@ -124,30 +143,26 @@ export default function Home() {
         title: title,
         content: cleanContent
       };
+      
       const updatedHistory = [newEntry, ...analysisHistory];
       setAnalysisHistory(updatedHistory);
       localStorage.setItem('focus_ai_history', JSON.stringify(updatedHistory));
       setTranscriptInput(''); // Clear input after success
 
       // Extract action items for import popup
-      const actionMatches = completion.match(/\[ACTION\](.*?)(\n|$)/g);
+      const actionMatches = fullCompletion.match(/\[ACTION\](.*?)(\n|$)/g);
       if (actionMatches && actionMatches.length > 0) {
         const items = actionMatches.map(m => m.replace(/\[ACTION\]/, '').trim()).filter(Boolean);
         setExtractedActionItems(items);
         setSelectedItemsToImport(new Set(items.map((_, i) => i)));
         setIsImportModalOpen(true);
       }
-    },
-    onError: (err) => {
+    } catch (err: any) {
       console.error('AI Completion Error:', err);
-      alert(`AI Error: ${err.message || 'Failed to connect to assistant'}`);
+      alert(`AI Error: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsAnalyzing(false);
     }
-  });
-
-  const handleAnalyze = async () => {
-    if (!transcriptInput.trim() || isAnalyzing) return;
-    setCompletion(''); // Reset completion for new run
-    await complete(transcriptInput, { body: { userName } });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

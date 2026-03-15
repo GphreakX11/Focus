@@ -1,5 +1,5 @@
 import { google } from '@ai-sdk/google';
-import { streamText } from 'ai';
+import { generateText } from 'ai';
 
 // Mark the route as dynamic
 export const dynamic = 'force-dynamic';
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       GEMINI: !!process.env.GEMINI_API_KEY 
     });
 
-    const result = await streamText({
+    const result = await generateText({
       model: google('gemini-2.5-flash') as any,
       system: `You are a highly capable AI Meeting Assistant. The user's name is ${userName || 'the user'}. 
                Your goal is to process meeting transcripts and provide high-value insights.
@@ -43,7 +43,10 @@ export async function POST(req: Request) {
       prompt: finalTranscript,
     });
 
-    return result.toTextStreamResponse();
+    return new Response(result.text, {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain' }
+    });
   } catch (error: any) {
     console.error('AI Analysis Error:', error);
     const errorMessage = error?.message || 'Unknown error occurred';
