@@ -37,18 +37,18 @@ export default function Home() {
   const [hour, setHour] = useState(null as number | null);
   
   // App State (To-Dos)
-  const [todos, setTodos] = useState([]);
+  const [todos, setTodos] = useState([] as Todo[]);
   const [newTodoText, setNewTodoText] = useState('');
   
   // Habitica State
-  const [habits, setHabits] = useState([]);
+  const [habits, setHabits] = useState([] as Habit[]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [newHabitText, setNewHabitText] = useState('');
 
   // Editing State
   const [editingHabitId, setEditingHabitId] = useState(null as string | null);
   const [editingHabitText, setEditingHabitText] = useState('');
-  const [editingTodoId, setEditingTodoId] = useState(null);
+  const [editingTodoId, setEditingTodoId] = useState(null as string | null);
   const [editingTodoText, setEditingTodoText] = useState('');
   const [editingTodoDate, setEditingTodoDate] = useState('');
 
@@ -91,8 +91,11 @@ export default function Home() {
   // AI Meeting Assistant State
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [userName, setUserName] = useState('');
-  const [analysisHistory, setAnalysisHistory] = useState<AnalysisHistory[]>([]);
+  const [analysisHistory, setAnalysisHistory] = useState([] as AnalysisHistory[]);
   const [transcriptInput, setTranscriptInput] = useState('');
+  const [extractedActionItems, setExtractedActionItems] = useState<string[]>([]);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [selectedItemsToImport, setSelectedItemsToImport] = useState(new Set() as Set<number>);
   
   const { completion, complete, isLoading: isAnalyzing, setCompletion } = useCompletion({
     api: '/api/analyze-transcript',
@@ -108,6 +111,15 @@ export default function Home() {
       setAnalysisHistory(updatedHistory);
       localStorage.setItem('focus_ai_history', JSON.stringify(updatedHistory));
       setTranscriptInput(''); // Clear input after success
+
+      // Extract action items for import popup
+      const actionMatches = completion.match(/\[ACTION\](.*?)(\n|$)/g);
+      if (actionMatches && actionMatches.length > 0) {
+        const items = actionMatches.map(m => m.replace(/\[ACTION\]/, '').trim()).filter(Boolean);
+        setExtractedActionItems(items);
+        setSelectedItemsToImport(new Set(items.map((_, i) => i)));
+        setIsImportModalOpen(true);
+      }
     },
     onError: (err) => {
       console.error('AI Completion Error:', err);
@@ -138,6 +150,21 @@ export default function Home() {
     reader.readAsText(file);
   };
 
+  const handleImportItems = () => {
+    const itemsToImport = extractedActionItems.filter((_, i) => selectedItemsToImport.has(i));
+    const today = getTodayStrWithLog();
+    const newTodos = itemsToImport.map(text => ({
+      id: Date.now().toString() + Math.random(),
+      text,
+      completed: false,
+      activeTab: true,
+      activeSince: today
+    } as Todo));
+    setTodos(prev => [...prev, ...newTodos]);
+    setIsImportModalOpen(false);
+    setExtractedActionItems([]);
+  };
+
   const handleAiDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -150,7 +177,7 @@ export default function Home() {
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        setTranscriptInput(event.target?.result as string);
+        setTranscriptInput((event.target?.result as string) || "");
       };
       reader.readAsText(file);
     }
@@ -195,11 +222,17 @@ export default function Home() {
     const savedDailies = localStorage.getItem('focus-dailies');
     
     if (savedTodos) {
-      let parsedTodos = JSON.parse(savedTodos);
-      if (shouldPurge) {
-        parsedTodos = parsedTodos.filter((t) => !t.completed);
+      try {
+        let parsedTodos = JSON.parse(savedTodos);
+        if (Array.isArray(parsedTodos)) {
+          if (shouldPurge) {
+            parsedTodos = parsedTodos.filter((t) => !t.completed);
+          }
+          setTodos(parsedTodos);
+        }
+      } catch (e) {
+        console.error('Failed to parse todos:', e);
       }
-      setTodos(parsedTodos);
     } else {
       // Migrate from old "One Big Thing" structure if it exists
       const savedThing = localStorage.getItem('focus-big-thing');
@@ -213,18 +246,32 @@ export default function Home() {
     // Parse Habits (combining old habits and old dailies to preserve data)
     let initialHabits: Habit[] = [];
     if (savedDailies) {
-      initialHabits = [...initialHabits, ...JSON.parse(savedDailies)];
+      try {
+        const parsed = JSON.parse(savedDailies);
+        if (Array.isArray(parsed)) initialHabits = [...initialHabits, ...parsed];
+      } catch (e) {}
     }
     if (savedHabits) {
       try {
         const parsed = JSON.parse(savedHabits);
-        // Map old habits (+/-) to new schema if they don't have completed flag
-        const migrated = parsed.filter((h) => h.score !== undefined).map((h) => ({
-          id: h.id, text: h.text, completed: false, lastCompletedDate: ''
-        }));
-        // If it's already the new schema (e.g. page reload after this update), just use it
-        const current = parsed.filter((h) => h.score === undefined);
-        initialHabits = [...initialHabits, ...migrated, ...current];
+        if (Array.isArray(parsed)) {
+          // Map old habits (+/-) to new schema if they don't have completed flag
+          const migrated = parsed.filter((h) => h.score !== undefined).map((h) => ({
+            id: h.id, text: h.text, completed: false, lastCompletedDate: ''
+          }));
+          // If it's already the new schema (e.g. page reload after this update), just use it
+          const current = parsed.filter((h) => h.score === undefined);
+          initialHabits = [...initialHabits, ...migrated, ...current];
+        }
+      } catch (e) {
+        console.error('Failed to parse habits:', e);
+      }
+    }
+
+    if (localStorage.getItem('focus_ai_history')) {
+      try {
+        const history = JSON.parse(localStorage.getItem('focus_ai_history') || '[]');
+        if (Array.isArray(history)) setAnalysisHistory(history);
       } catch (e) {}
     }
 
@@ -1492,6 +1539,69 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Action Item Import Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-6">
+          <div 
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300" 
+            onClick={() => setIsImportModalOpen(false)}
+          />
+          <div className="relative w-full max-w-lg bg-slate-900/90 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[80vh]">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-500/20 rounded-xl">
+                  <Sparkles className="h-5 w-5 text-indigo-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white">Import Action Items</h3>
+              </div>
+              <button 
+                onClick={() => setIsImportModalOpen(false)}
+                className="p-2 text-white/40 hover:text-white transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex flex-col gap-3 font-sans">
+              <p className="text-sm text-white/60 mb-2">We found potential action items. Select the ones you want to add to your Active task list:</p>
+              {extractedActionItems.map((item, idx) => (
+                <div 
+                  key={idx}
+                  onClick={() => {
+                    const next = new Set(selectedItemsToImport);
+                    if (next.has(idx)) next.delete(idx);
+                    else next.add(idx);
+                    setSelectedItemsToImport(next);
+                  }}
+                  className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${selectedItemsToImport.has(idx) ? 'bg-indigo-500/20 border-indigo-500/50 text-white' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
+                >
+                  <div className={`mt-0.5 h-5 w-5 rounded-md border flex items-center justify-center transition-all ${selectedItemsToImport.has(idx) ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-white/20'}`}>
+                    {selectedItemsToImport.has(idx) && <Check className="h-3 w-3 stroke-[3]" />}
+                  </div>
+                  <span className="text-sm font-medium leading-tight">{item}</span>
+                </div>
+              ))}
+            </div>
+            
+            <div className="p-6 bg-slate-950/50 border-t border-white/5 flex gap-3">
+              <button 
+                onClick={() => setIsImportModalOpen(false)}
+                className="flex-1 py-3 rounded-2xl font-bold text-white/40 hover:text-white hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleImportItems}
+                disabled={selectedItemsToImport.size === 0}
+                className="flex-[2] py-3 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl font-bold shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98]"
+              >
+                Import {selectedItemsToImport.size} Items
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

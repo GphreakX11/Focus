@@ -28,6 +28,8 @@ export async function POST(req: Request) {
                Please provide:
                1. A brief summary of the meeting.
                2. A bulleted list of Action Items specifically assigned to ${userName || 'the user'}. 
+                  IMPORTANT: Prefix each distinct action item that is a standalone task with "[ACTION]". 
+                  For example: "[ACTION] Send the budget report to Sarah."
                3. A list of general decisions made during the meeting.
                Keep the tone professional and concise. Use Markdown for formatting.`,
       prompt: transcript,
