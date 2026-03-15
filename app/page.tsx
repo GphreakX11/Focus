@@ -200,12 +200,13 @@ export default function Home() {
       });
     }
 
-    // Calculate current Focus Day (Resets at 3:00 AM EST)
+    // Calculate current Focus Day (Resets at 3:00 AM Local time to avoid Safari Date parse bugs)
     const getFocusDayStr = () => {
-      const estString = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-      const estNow = new Date(estString);
-      if (estNow.getHours() < 3) estNow.setDate(estNow.getDate() - 1);
-      return `${estNow.getFullYear()}-${estNow.getMonth() + 1}-${estNow.getDate()}`;
+      const now = new Date();
+      if (now.getHours() < 3) {
+        now.setDate(now.getDate() - 1);
+      }
+      return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     };
     const focusDayStr = getFocusDayStr();
     const savedFocusDayStr = localStorage.getItem('focus-day-str');

@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     });
 
     const result = await streamText({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-1.5-flash') as any,
       system: `You are a highly capable AI Meeting Assistant. The user's name is ${userName || 'the user'}. 
                Your goal is to process meeting transcripts and provide high-value insights.
                Please provide:
@@ -43,8 +43,9 @@ export async function POST(req: Request) {
     });
 
     return result.toTextStreamResponse();
-  } catch (error) {
+  } catch (error: any) {
     console.error('AI Analysis Error:', error);
-    return new Response('Error processing transcript', { status: 500 });
+    const errorMessage = error?.message || 'Unknown error occurred';
+    return new Response(`Error processing transcript: ${errorMessage}`, { status: 500 });
   }
 }
