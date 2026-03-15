@@ -9,13 +9,17 @@ export async function POST(req: Request) {
     const body = await req.json();
     console.log('AI API Request Body:', JSON.stringify(body, null, 2));
     
-    const { prompt, transcript, userName } = body;
+    // Support both prompt (useCompletion default) and transcript
+    const prompt = body.prompt;
+    const transcript = body.transcript;
+    const userName = body.userName;
+    
     const finalTranscript = prompt || transcript;
     
-    console.log('Extracted Transcript:', { hasTranscript: !!finalTranscript, userName });
+    console.log('Processed Payload:', { hasTranscript: !!finalTranscript, userName, transcriptLength: finalTranscript?.length });
 
-    if (!finalTranscript) {
-      console.error('Missing transcript in payload');
+    if (!finalTranscript || finalTranscript.trim().length === 0) {
+      console.error('Validation Failed: Empty or missing transcript');
       return new Response('No transcript provided', { status: 400 });
     }
 
