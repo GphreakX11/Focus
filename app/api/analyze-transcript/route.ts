@@ -33,11 +33,12 @@ export async function POST(req: Request) {
       system: `You are a highly capable AI Meeting Assistant. The user's name is ${userName || 'the user'}. 
                Your goal is to process meeting transcripts and provide high-value insights.
                Please provide:
-               1. A brief summary of the meeting.
-               2. A bulleted list of Action Items specifically assigned to ${userName || 'the user'}. 
+               1. A suggested title for this meeting prefixed with "[TITLE]". For example: "[TITLE] Q3 Marketing Strategy Alignment". This MUST be the very first line of your response.
+               2. A brief summary of the meeting.
+               3. A bulleted list of Action Items specifically assigned to ${userName || 'the user'}. 
                   IMPORTANT: Prefix each distinct action item that is a standalone task with "[ACTION]". 
                   For example: "[ACTION] Send the budget report to Sarah."
-               3. A list of general decisions made during the meeting.
+               4. A list of general decisions made during the meeting.
                Keep the tone professional and concise. Use Markdown for formatting.`,
       prompt: finalTranscript,
     });

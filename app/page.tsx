@@ -96,16 +96,27 @@ export default function Home() {
   const [extractedActionItems, setExtractedActionItems] = useState<string[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedItemsToImport, setSelectedItemsToImport] = useState(new Set() as Set<number>);
+  const [viewingAnalysis, setViewingAnalysis] = useState<AnalysisHistory | null>(null);
   
   const { completion, complete, isLoading: isAnalyzing, setCompletion } = useCompletion({
     api: '/api/analyze-transcript',
     onFinish: (_prompt, completion) => {
+      // Extract Title
+      let title = "Meeting Analysis";
+      let cleanContent = completion;
+      const titleMatch = completion.match(/\[TITLE\](.*?)(?=\n|$)/);
+      if (titleMatch && titleMatch[1]) {
+        title = titleMatch[1].trim();
+        cleanContent = completion.replace(/\[TITLE\].*?(\n|$)/, '').trim();
+      }
+      setCompletion(cleanContent);
+
       // Save to history when finished
       const newEntry: AnalysisHistory = {
         id: Date.now().toString(),
         date: new Date().toLocaleString(),
-        title: transcriptInput.slice(0, 30) + (transcriptInput.length > 30 ? '...' : ''),
-        content: completion
+        title: title,
+        content: cleanContent
       };
       const updatedHistory = [newEntry, ...analysisHistory];
       setAnalysisHistory(updatedHistory);
@@ -191,9 +202,14 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
     
-    // Register PWA Service Worker
+    // Register PWA Service Worker & Force Clear Old Caches to fix White Screen
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       window.addEventListener('load', function() {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
         navigator.serviceWorker.register('/sw.js').catch(function(err) {
           console.error('ServiceWorker registration failed: ', err);
         });
@@ -1524,10 +1540,7 @@ export default function Home() {
                       {item.content}
                     </p>
                     <button 
-                      onClick={() => {
-                        setTranscriptInput(""); 
-                        setCompletion(item.content);
-                      }}
+                      onClick={() => setViewingAnalysis(item)}
                       className="mt-3 text-[10px] font-bold text-indigo-400/80 hover:text-indigo-400 flex items-center gap-1"
                     >
                       View Full Analysis →
@@ -1539,6 +1552,34 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* View Analysis Modal */}
+      {viewingAnalysis && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 sm:p-6">
+          <div 
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300" 
+            onClick={() => setViewingAnalysis(null)}
+          />
+          <div className="relative w-full max-w-2xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
+              <h2 className="text-xl font-bold text-white pr-8 truncate flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-indigo-400" />
+                {viewingAnalysis.title}
+              </h2>
+              <button 
+                onClick={() => setViewingAnalysis(null)}
+                className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto font-sans text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
+              {viewingAnalysis.content}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Action Item Import Modal */}
       {isImportModalOpen && (
