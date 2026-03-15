@@ -148,6 +148,9 @@ export default function Home() {
       setAnalysisHistory(updatedHistory);
       localStorage.setItem('focus_ai_history', JSON.stringify(updatedHistory));
       setTranscriptInput(''); // Clear input after success
+      
+      // Auto-open the analysis modal
+      setViewingAnalysis(newEntry);
 
       // Extract action items for import popup
       const actionMatches = fullCompletion.match(/\[ACTION\](.*?)(\n|$)/g);
@@ -1492,37 +1495,21 @@ export default function Home() {
             )}
           </button>
 
-          {/* Real-time Result */}
-          {(completion || isAnalyzing) && (
-            <div className="flex flex-col gap-2 animate-slide-up">
-              <label className="text-[10px] uppercase font-bold tracking-widest text-indigo-400 ml-1">Latest Analysis</label>
-              <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-5 text-white/90 text-sm whitespace-pre-wrap leading-relaxed">
-                {completion}
-                {isAnalyzing && !completion && (
-                  <div className="flex gap-1 items-center opacity-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.3s]"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.15s]"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-bounce"></div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* History List */}
           <div className="flex flex-col gap-4 mt-4 mb-10">
             <div className="flex items-center justify-between px-1">
               <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 flex items-center gap-2">
                 <History className="h-3 w-3" />
-                Past Analyses
+                Past Meetings
               </label>
               {analysisHistory.length > 0 && (
                 <button 
                   onClick={() => { setAnalysisHistory([]); localStorage.removeItem('focus_ai_history'); }}
                   className="text-[9px] uppercase font-bold text-red-400/60 hover:text-red-400 transition-colors"
                 >
-                  Clear History
+                  Clear Meetings
                 </button>
+
               )}
             </div>
             
@@ -1546,7 +1533,7 @@ export default function Home() {
                            setAnalysisHistory(updated);
                            localStorage.setItem('focus_ai_history', JSON.stringify(updated));
                          }}
-                         className="opacity-0 group-hover:opacity-100 p-1 text-white/20 hover:text-red-400 transition-all"
+                         className="opacity-40 hover:opacity-100 p-1 text-red-400 hover:text-red-400 transition-all"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -1599,7 +1586,7 @@ export default function Home() {
 
       {/* Action Item Import Modal */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 sm:p-6">
           <div 
             className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300" 
             onClick={() => setIsImportModalOpen(false)}
