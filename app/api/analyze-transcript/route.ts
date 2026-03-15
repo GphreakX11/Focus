@@ -7,12 +7,15 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { prompt: transcript, userName } = body;
+    console.log('AI API Request Body:', JSON.stringify(body, null, 2));
     
-    console.log('AI API Request:', { hasTranscript: !!transcript, userName });
+    const { prompt, transcript, userName } = body;
+    const finalTranscript = prompt || transcript;
+    
+    console.log('Extracted Transcript:', { hasTranscript: !!finalTranscript, userName });
 
-    if (!transcript) {
-      console.error('Missing transcript');
+    if (!finalTranscript) {
+      console.error('Missing transcript in payload');
       return new Response('No transcript provided', { status: 400 });
     }
 
@@ -32,7 +35,7 @@ export async function POST(req: Request) {
                   For example: "[ACTION] Send the budget report to Sarah."
                3. A list of general decisions made during the meeting.
                Keep the tone professional and concise. Use Markdown for formatting.`,
-      prompt: transcript,
+      prompt: finalTranscript,
     });
 
     return result.toTextStreamResponse();
