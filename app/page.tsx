@@ -362,7 +362,7 @@ export default function Home() {
     // Completely Disable Service Worker (Fixes iOS Safari White Screen PWA Bug)
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
+        for(const registration of registrations) {
           registration.unregister();
         }
       });
