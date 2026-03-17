@@ -3,8 +3,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /**
- * Calendar Analyzer using FormData and Gemini 3-Flash-Preview
- * Syncing to v1 endpoint for production stability.
+ * Calendar Analyzer using FormData and Gemini 3-Flash-Preview.
+ * Updated to support Daily Breakdown and History generation.
  */
 export async function analyzeCalendar(formData: FormData) {
   try {
@@ -18,20 +18,26 @@ export async function analyzeCalendar(formData: FormData) {
       throw new Error("GEMINI_API_KEY is not set on the server.");
     }
 
-    // Initialize with v1 endpoint stability preference if supported by SDK version
-    // Otherwise the SDK defaults to v1beta for some models, but gemini-3 usually supports v1.
     const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // Using gemini-3-flash-preview as requested for better free-tier RPM and precision
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3-flash-preview",
-      apiVersion: "v1" // Attempt to sync to stable v1 endpoint
+      apiVersion: "v1"
     });
 
-    // Clean image data
     const base64Data = base64Image.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, "");
 
-    const prompt = "Analyze this weekly calendar screenshot. Return ONLY a valid JSON object with two keys: timesheet and suggested_tasks.\n\ntimesheet is an array of objects: { day (string), activity (string), duration_minutes (number) }.\n\nsuggested_tasks is an array of objects: { task_name (string, a short, highly probable prep or follow-up action based on the meeting title), related_meeting (string) }. Only infer tasks for meetings that clearly require prep or follow-up (e.g., '1:1', 'Review', 'Planning'). Ignore generic blocks like 'Lunch' or 'Focus Time'. Do not include any text outside the JSON.";
+    // Updated prompt to include day_of_week as requested
+    const prompt = `Analyze this weekly calendar screenshot. Return ONLY a valid JSON object with two keys: timesheet and suggested_tasks.
+
+timesheet is an array of objects: { day_of_week (string, e.g. 'Monday'), activity (string), date (string), duration_minutes (number) }.
+
+suggested_tasks is an array of objects: { task_name (string), related_meeting (string) }. 
+
+Rules for extraction:
+1. Extract ALL scheduled events.
+2. For each meeting, ensure you provide the correct day_of_week.
+3. Ignore generic blocks like 'Lunch' or 'Focus Time' for suggested_tasks, but INCLUDE them in timesheet if they are on the calendar.
+4. Return ONLY the JSON object.`;
 
     const result = await model.generateContent([
       prompt,
@@ -65,48 +71,60 @@ export async function analyzeCalendar(formData: FormData) {
     }
 
     const events = parseData.timesheet;
-    let adminPoolMinutes = 2400; 
-    const activityMap: Record<string, number> = {};
+    
+    // Group by Day of Week
+    const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const groupedData: Record<string, { activity: string; minutes: number }[]> = {};
 
     for (const event of events) {
-      if (typeof event.duration_minutes !== 'number' || typeof event.activity !== 'string') continue;
-      const activity = event.activity.trim();
-      const duration = event.duration_minutes;
-      activityMap[activity] = (activityMap[activity] || 0) + duration;
-      adminPoolMinutes -= duration;
+      const day = event.day_of_week || 'Unknown';
+      if (!groupedData[day]) groupedData[day] = [];
+      groupedData[day].push({ 
+        activity: event.activity, 
+        minutes: event.duration_minutes || 0 
+      });
     }
 
-    const finalResults = Object.entries(activityMap).map(([activity, duration]) => ({
-      activity,
-      hours: Number((duration / 60).toFixed(2))
-    }));
+    // Generate Markdown Table with Daily Breakdowns
+    let markdownTable = "| Day | Activity | Hours |\n| :--- | :--- | :--- |\n";
+    
+    // Sort and process by day
+    const sortedDays = Object.keys(groupedData).sort((a, b) => daysOrder.indexOf(a) - daysOrder.indexOf(b));
 
-    if (adminPoolMinutes > 0) {
-      finalResults.push({ activity: 'Admin', hours: Number((adminPoolMinutes / 60).toFixed(2)) });
+    for (const day of sortedDays) {
+      const dayEvents = groupedData[day];
+      let totalMeetingMinutes = 0;
+      
+      // Add individual activity rows for the day
+      for (const event of dayEvents) {
+        const hours = (event.minutes / 60).toFixed(2);
+        markdownTable += `| ${day} | ${event.activity} | ${hours} |\n`;
+        totalMeetingMinutes += event.minutes;
+      }
+
+      // Calculate Admin time for this specific day (8 hours baseline = 480 mins)
+      const adminMinutes = Math.max(0, 480 - totalMeetingMinutes);
+      const adminHours = (adminMinutes / 60).toFixed(2);
+      markdownTable += `| ${day} | **Admin** | **${adminHours}** |\n`;
+      
+      // Add a separator line in markdown? Actually standard tables don't have separators, 
+      // but we'll keep the Day column filled to make it clear.
     }
-
-    finalResults.sort((a, b) => b.hours - a.hours);
 
     return { 
       success: true, 
       data: { 
-        timesheetData: finalResults, 
+        markdownTable,
         suggestedTasks: parseData.suggested_tasks || [] 
       } 
     };
   } catch (error: any) {
-    // CRITICAL: Precise error logging as requested
-    console.error("Detailed GoogleGenerativeAI Error:", {
-      message: error.message,
-      stack: error.stack,
-      status: error.status,
-      statusText: error.statusText,
-      errorDetails: error.errorDetails
-    });
-    
+    console.error("Detailed GoogleGenerativeAI Error:", error);
     return { 
       success: false, 
       error: error.message || "Unknown error during calendar analysis." 
     };
   }
 }
+
+// maxDuration removed to fix build error with Turbopack and Server Actions

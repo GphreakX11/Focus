@@ -29,6 +29,12 @@ type AnalysisHistory = {
   content: string;
 };
 
+type TimesheetHistory = {
+  id: string;
+  date: string;
+  markdown: string;
+};
+
 const DEFAULT_HABITS: Habit[] = [];
 
 const getTodayStr = () => new Date().toLocaleDateString('en-CA');
@@ -109,6 +115,20 @@ export default function Home() {
   const [suggestedTasks, setSuggestedTasks] = useState<{ task_name: string, related_meeting: string }[]>([]);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState(false);
+  const [calendarHistory, setCalendarHistory] = useState<TimesheetHistory[]>([]);
+  const [viewingTimesheet, setViewingTimesheet] = useState<TimesheetHistory | null>(null);
+
+  const saveToCalendarHistory = (markdown: string) => {
+    const newEntry: TimesheetHistory = {
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      markdown: markdown
+    };
+    const updated = [newEntry, ...calendarHistory].slice(0, 10);
+    setCalendarHistory(updated);
+    localStorage.setItem('focus_timesheet_history', JSON.stringify(updated));
+    setViewingTimesheet(newEntry);
+  };
 
   const handleAddSuggestedTask = (task: { task_name: string, related_meeting: string }, idx: number) => {
     const textToSubmit = `[Prep for ${task.related_meeting}] ${task.task_name}`;
@@ -281,10 +301,10 @@ export default function Home() {
       
       if (response.success && response.data) {
         const payload = response.data as { 
-          timesheetData: { activity: string; hours: number }[];
+          markdownTable: string;
           suggestedTasks: { task_name: string; related_meeting: string }[];
         };
-        setCalendarResults(payload.timesheetData);
+        saveToCalendarHistory(payload.markdownTable);
         setSuggestedTasks(payload.suggestedTasks || []);
       } else {
         throw new Error(response.error || "Failed to process calendar.");
@@ -299,10 +319,10 @@ export default function Home() {
     }
   };
 
-  const handleCopyTSV = () => {
-    if (!calendarResults) return;
-    const tsvData = ["Activity\tHours", ...calendarResults.map(r => `${r.activity}\t${r.hours}`)].join("\n");
-    navigator.clipboard.writeText(tsvData);
+  const handleCopyTSV = (content?: string) => {
+    const textToCopy = content || (viewingTimesheet?.markdown || "");
+    if (!textToCopy) return;
+    navigator.clipboard.writeText(textToCopy);
     setCopiedIndex(true);
     setTimeout(() => setCopiedIndex(false), 2000);
   };
@@ -452,6 +472,13 @@ export default function Home() {
       try {
         const history = JSON.parse(localStorage.getItem('focus_ai_history') || '[]');
         if (Array.isArray(history)) setAnalysisHistory(history);
+      } catch (e) {}
+    }
+
+    if (localStorage.getItem('focus_timesheet_history')) {
+      try {
+        const history = JSON.parse(localStorage.getItem('focus_timesheet_history') || '[]');
+        if (Array.isArray(history)) setCalendarHistory(history);
       } catch (e) {}
     }
 
@@ -1786,90 +1813,89 @@ export default function Home() {
                 </div>
               )}
 
-              {calendarResults && (
-                <div className="mt-4 flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-xs uppercase bg-white/5 text-white/50 border-b border-white/10">
-                        <tr>
-                          <th className="px-4 py-3 font-semibold">Activity</th>
-                          <th className="px-4 py-3 font-semibold text-right w-24">Hours</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 text-white/90">
-                        {calendarResults.map((row, i) => (
-                          <tr key={i} className="hover:bg-white/5 transition-colors">
-                            <td className="px-4 py-2 font-medium">{row.activity}</td>
-                            <td className="px-4 py-2 text-right font-mono text-indigo-300">{row.hours.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="border-t border-white/10 bg-black/20 font-bold text-white">
-                        <tr>
-                          <td className="px-4 py-3">Total</td>
-                          <td className="px-4 py-3 text-right text-indigo-400">
-                            {calendarResults.reduce((sum, row) => sum + row.hours, 0).toFixed(2)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
+              {/* Section: History List */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4 text-white/40" />
+                    <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest">Recent Timesheets</h3>
                   </div>
-
-                  <div className="flex gap-3 mt-1 mb-8">
+                  {calendarHistory.length > 0 && (
                     <button 
-                      onClick={handleCopyTSV}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 transition-all font-medium text-xs sm:text-sm active:scale-95"
+                      onClick={() => { setCalendarHistory([]); localStorage.removeItem('focus_timesheet_history'); }}
+                      className="text-[10px] text-red-400/50 hover:text-red-400 transition-colors"
                     >
-                      {copiedIndex ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                      {copiedIndex ? 'Copied!' : 'Copy for Excel'}
+                      Clear All
                     </button>
-                    <button 
-                      onClick={handleDownloadCSV}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 transition-all font-medium text-xs sm:text-sm active:scale-95"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download CSV
-                    </button>
-                  </div>
-
-                  {/* Section B: Suggested Tasks */}
-                  {suggestedTasks && suggestedTasks.length > 0 && (
-                    <div className="flex flex-col gap-3 mt-2 mb-8 pt-6 border-t border-white/10">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-indigo-400" />
-                        <h3 className="text-white font-bold text-sm tracking-wide">Suggested Focus Items</h3>
-                      </div>
-                      <p className="text-xs text-white/50 mb-2 leading-relaxed">
-                        Based on your calendar meetings, I&apos;ve inferred these potential preparation or follow-up tasks. Add them straight to your active list.
-                      </p>
-                      
-                      <div className="flex flex-col gap-2">
-                        {suggestedTasks.map((task, idx) => (
-                          <div 
-                            key={idx}
-                            className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-start justify-between gap-3 group hover:bg-white/10 transition-all"
-                          >
-                            <div className="flex flex-col gap-1 min-w-0 flex-1">
-                              <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider font-mono truncate">
-                                FOR: {task.related_meeting}
-                              </span>
-                              <span className="text-sm font-semibold text-white/90 leading-tight">
-                                {task.task_name}
-                              </span>
-                            </div>
-                            
-                            <button
-                              onClick={() => handleAddSuggestedTask(task, idx)}
-                              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 mt-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[10px] uppercase tracking-wider transition-all active:scale-95 shadow-[0_0_15px_rgba(99,102,241,0.2)]"
-                            >
-                              <Check className="h-3 w-3 stroke-[3]" />
-                              Add
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   )}
+                </div>
+                
+                {calendarHistory.length === 0 ? (
+                  <div className="py-8 px-4 border border-dashed border-white/10 rounded-2xl text-center">
+                    <p className="text-xs text-white/20">No history yet. Generate a timesheet to see it here.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {calendarHistory.map((item) => (
+                      <div 
+                        key={item.id}
+                        onClick={() => setViewingTimesheet(item)}
+                        className="group flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-indigo-500/30 hover:bg-white/10 transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-white/80">Timesheet Generated</p>
+                            <p className="text-[10px] text-white/40">{item.date}</p>
+                          </div>
+                        </div>
+                        <button className="opacity-0 group-hover:opacity-100 p-2 text-white/40 hover:text-white transition-all">
+                          <Download className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Section B: Suggested Tasks */}
+              {suggestedTasks && suggestedTasks.length > 0 && (
+                <div className="flex flex-col gap-3 mt-2 mb-8 pt-6 border-t border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-indigo-400" />
+                    <h3 className="text-white font-bold text-sm tracking-wide">Suggested Focus Items</h3>
+                  </div>
+                  <p className="text-xs text-white/50 mb-2 leading-relaxed">
+                    Based on your calendar meetings, I&apos;ve inferred these potential preparation or follow-up tasks. Add them straight to your active list.
+                  </p>
+                  
+                  <div className="flex flex-col gap-2">
+                    {suggestedTasks.map((task, idx) => (
+                      <div 
+                        key={idx}
+                        className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-start justify-between gap-3 group hover:bg-white/10 transition-all"
+                      >
+                        <div className="flex flex-col gap-1 min-w-0 flex-1">
+                          <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider font-mono truncate">
+                            FOR: {task.related_meeting}
+                          </span>
+                          <span className="text-sm font-semibold text-white/90 leading-tight">
+                            {task.task_name}
+                          </span>
+                        </div>
+                        
+                        <button
+                          onClick={() => handleAddSuggestedTask(task, idx)}
+                          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 mt-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[10px] uppercase tracking-wider transition-all active:scale-95 shadow-[0_0_15px_rgba(99,102,241,0.2)]"
+                        >
+                          <Check className="h-3 w-3 stroke-[3]" />
+                          Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1967,6 +1993,85 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Timesheet Modal Overlay */}
+      {viewingTimesheet && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-[#12121e] w-full max-w-2xl max-h-[90vh] rounded-3xl border border-white/10 flex flex-col shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <Calendar className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white leading-tight">Weekly Timesheet</h2>
+                  <p className="text-xs text-white/40">{viewingTimesheet.date}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setViewingTimesheet(null)}
+                className="p-2 hover:bg-white/10 rounded-xl text-white/40 hover:text-white transition-all"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 font-sans text-left">
+                <div className="prose prose-invert max-w-none text-white/90">
+                  <ReactMarkdown>{viewingTimesheet.markdown}</ReactMarkdown>
+                </div>
+            </div>
+
+            <div className="p-6 bg-white/5 border-t border-white/10 flex gap-4">
+              <button 
+                onClick={() => handleCopyTSV()}
+                className="flex-1 py-4 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-2xl transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2"
+              >
+                {copiedIndex ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                {copiedIndex ? 'Copied to Clipboard!' : 'Copy Markdown Table'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+// Simple internal markdown renderer if needed or just use standard tags
+// Since we don't have react-markdown installed and are restricted from complex installs,
+// let's do a simple manual parse of our specific table format.
+function ReactMarkdown({ children }: { children: string }) {
+  const lines = children.split('\n');
+  const tableLines = lines.filter(l => l.startsWith('|'));
+  
+  if (tableLines.length === 0) return <div className="whitespace-pre-wrap">{children}</div>;
+
+  const headers = tableLines[0].split('|').filter(s => s.trim()).map(s => s.trim());
+  const rows = tableLines.slice(2).map(l => l.split('|').filter(s => s.trim()).map(s => s.trim()));
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-white/10">
+      <table className="w-full text-sm text-left">
+        <thead className="bg-white/5 text-xs uppercase text-white/40">
+          <tr>
+            {headers.map((h, i) => (
+              <th key={i} className="px-4 py-3 font-semibold">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/5">
+          {rows.map((row, i) => (
+            <tr key={i} className="hover:bg-white/5 transition-colors">
+              {row.map((cell, j) => (
+                <td key={j} className={`px-4 py-2 ${j === 2 ? 'font-mono text-indigo-400' : 'text-white/80'}`}>
+                  {cell.startsWith('**') ? <strong>{cell.replace(/\*\*/g, '')}</strong> : cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
