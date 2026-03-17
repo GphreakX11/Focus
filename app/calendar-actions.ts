@@ -32,8 +32,8 @@ timesheet is an array of objects: { day_of_week (string, e.g. 'Monday'), activit
 suggested_tasks is an array of objects: { task_name (string), related_meeting (string) }. 
 
 Rules for extraction:
-1. Extract ALL scheduled events. Provide the FULL, complete meeting title (e.g. "Wraithwatch Weekly Sync" instead of just "Wraithwatch").
-2. For EACH event, you MUST provide the correct day_of_week (e.g., 'Monday', 'Tuesday'). 
+1. Extract ALL scheduled events. Provide the FULL, complete meeting title (e.g. "Wraithwatch Weekly Sync").
+2. For EACH event, you MUST provide the correct day_of_week. You are ONLY allowed to use these exact values: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']. DO NOT use project names or any other strings for the day.
 3. For each activity name, STRIP OUT platform noise like "Microsoft Teams Meeting", "Zoom Meeting", "Meeting Link", or "Microsoft Teams" ONLY.
 4. DO NOT use Markdown bolding (no **) or italics in any activity names or durations.
 5. The duration_minutes MUST be a positive number.
@@ -93,13 +93,25 @@ Rules for extraction:
     });
 
     const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const validDayNames = new Set(daysOrder.map(d => d.toLowerCase()));
     const groupedData: Record<string, { activity: string; minutes: number }[]> = {};
     const noiseRegex = /(Microsoft Teams Meeting|Zoom Meeting|Meeting Link|Microsoft Teams|Teams Meeting)/gi;
 
     for (const event of events) {
-      const day = event.day_of_week || 'Unknown';
+      let day = (event.day_of_week || 'Friday').trim();
+      let activity = (event.activity || "Unknown Activity").trim();
+      
+      // Validation: If Gemini put a project name in the Day column, move it.
+      if (!validDayNames.has(day.toLowerCase())) {
+        activity = `${day} ${activity}`.trim();
+        day = 'Monday'; // Default to Monday if we can't tell, or ignore? Let's default to a sane fallback.
+      } else {
+        // Proper capitalization
+        day = day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
+      }
+
       if (!groupedData[day]) groupedData[day] = [];
-      const cleanActivity = event.activity
+      const cleanActivity = activity
         .replace(noiseRegex, '')
         .replace(/\s+/g, ' ')
         .replace(/\*/g, '')
@@ -136,9 +148,9 @@ Rules for extraction:
       markdown += `| ${day} | Admin (Daily) | ${(adminMins / 60).toFixed(2)} |\n`;
     }
 
-    markdown += "\n---\n\n## Weekly Summary\n\n| Activity | Total Hours |\n| :--- | :--- |\n";
+    markdown += "\n---\n\n## Weekly Summary\n\n| Week | Activity | Total Hours |\n| :--- | :--- | :--- |\n";
     for (const [activity, mins] of Object.entries(weeklyTotals)) {
-      markdown += `| ${activity} | ${(mins / 60).toFixed(2)} |\n`;
+      markdown += `| Total | ${activity} | ${(mins / 60).toFixed(2)} |\n`;
     }
     
     // Add Weekly Admin

@@ -165,15 +165,17 @@ export default function Home() {
           }
 
           // DAY INHERITANCE: If day is missing or '-', use the last valid day
+          const isTotal = day?.toLowerCase() === 'total' || day?.toLowerCase() === 'week';
+          
           if (!day || day === '-') {
             day = lastDay;
-          } else {
+          } else if (!isTotal) {
             lastDay = day;
           }
 
           return {
             id: `row-${idx}-${Date.now()}`,
-            day: day || lastDay, // Final fallback
+            day: day || lastDay,
             activity,
             hours: hours || '0.00'
           };
