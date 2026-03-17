@@ -260,8 +260,12 @@ export default function Home() {
     }
   };
 
+  // Ref-based guard to prevent concurrent API calls — cannot be double-fired even if state hasn't updated yet
+  const isCalendarProcessingRef = useRef(false);
+
   const handleAnalyzeCalendar = async () => {
-    if (!calendarImage || isAnalyzingCalendar) return;
+    if (!calendarImage || isAnalyzingCalendar || isCalendarProcessingRef.current) return;
+    isCalendarProcessingRef.current = true;
     setIsAnalyzingCalendar(true);
     setCalendarError(null);
     setCalendarResults(null);
@@ -270,7 +274,6 @@ export default function Home() {
     try {
       const response = await analyzeCalendar(calendarImage);
       if (response.success && response.data) {
-        // The new return format from actions.ts is an object with timesheetData and suggestedTasks
         const payload = response.data as { 
           timesheetData: { activity: string; hours: number }[];
           suggestedTasks: { task_name: string; related_meeting: string }[];
@@ -285,6 +288,7 @@ export default function Home() {
       setCalendarError(err.message || 'Unknown error');
     } finally {
       setIsAnalyzingCalendar(false);
+      isCalendarProcessingRef.current = false;
     }
   };
 
@@ -1751,6 +1755,7 @@ export default function Home() {
               )}
 
               <button 
+                type="button"
                 onClick={handleAnalyzeCalendar}
                 disabled={!calendarImage || isAnalyzingCalendar}
                 className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all mt-2 ${!calendarImage || isAnalyzingCalendar ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5' : 'bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)] active:scale-[0.98] hover:bg-indigo-400 border border-indigo-400/50'}`}
