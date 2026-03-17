@@ -37,7 +37,8 @@ Rules for extraction:
 3. DO NOT use Markdown bolding (no **) or italics in any activity names or durations.
 4. The duration_minutes MUST be a number representing the meeting length. Do not put text in this field.
 5. For each meeting, ensure you provide the correct day_of_week based on the visual layout.
-6. Return ONLY the JSON object.`;
+6. CRITICAL: Return ONLY the raw JSON array. Do not include summary rows, section dividers, or column headers (like an activity named "Activity" or "Tuesday") inside the JSON objects.
+7. Return ONLY the JSON object.`;
 
     const result = await model.generateContent([
       prompt,
@@ -69,10 +70,28 @@ Rules for extraction:
     if (!parseData || !Array.isArray(parseData.timesheet)) {
       throw new Error("Data missing in AI response.");
     }
-
-    const events = parseData.timesheet;
     
     // 1. Process Daily Dataset
+    // 1. Filter out metadata and junk rows
+    const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const junkNames = ['activity', 'activities', 'day', 'hours', 'description'];
+    
+    const events = (parseData.timesheet || []).filter((event: any) => {
+      const activity = (event.activity || "").toLowerCase().trim();
+      const mins = Number(event.duration_minutes) || 0;
+      
+      // Filter out 0 duration
+      if (mins <= 0) return false;
+      
+      // Filter out day names used as activities
+      if (dayNames.includes(activity)) return false;
+      
+      // Filter out common header names
+      if (junkNames.includes(activity)) return false;
+      
+      return true;
+    });
+
     const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const groupedData: Record<string, { activity: string; minutes: number }[]> = {};
 
