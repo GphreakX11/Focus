@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download } from 'lucide-react';
+import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus } from 'lucide-react';
 import { analyzeCalendar } from './calendar-actions';
 
 type Habit = {
@@ -33,6 +33,7 @@ type TimesheetHistory = {
   id: string;
   date: string;
   markdown: string;
+  suggestedTasks?: { task_name: string; related_meeting: string }[];
 };
 
 const DEFAULT_HABITS: Habit[] = [];
@@ -117,17 +118,21 @@ export default function Home() {
   const [copiedIndex, setCopiedIndex] = useState(false);
   const [calendarHistory, setCalendarHistory] = useState<TimesheetHistory[]>([]);
   const [viewingTimesheet, setViewingTimesheet] = useState<TimesheetHistory | null>(null);
+  const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(new Set());
 
-  const saveToCalendarHistory = (markdown: string) => {
+  const saveToCalendarHistory = (markdown: string, tasks?: { task_name: string, related_meeting: string }[]) => {
     const newEntry: TimesheetHistory = {
       id: Date.now().toString(),
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      markdown: markdown
+      markdown: markdown,
+      suggestedTasks: tasks
     };
     const updated = [newEntry, ...calendarHistory].slice(0, 10);
     setCalendarHistory(updated);
     localStorage.setItem('focus_timesheet_history', JSON.stringify(updated));
     setViewingTimesheet(newEntry);
+    // Auto-close drawer when opening a new timesheet
+    setIsAiDrawerOpen(false);
   };
 
   const handleAddSuggestedTask = (task: { task_name: string, related_meeting: string }, idx: number) => {
@@ -160,6 +165,13 @@ export default function Home() {
 
     // Remove from suggestions list
     setSuggestedTasks(prev => prev.filter((_, i) => i !== idx));
+    
+    // Track in suggested tasks set for modal feedback
+    setAddedSuggestions(prev => {
+      const next = new Set(prev);
+      next.add(`${task.related_meeting}-${task.task_name}`);
+      return next;
+    });
   };
 
   const handleAnalyze = async () => {
@@ -304,7 +316,7 @@ export default function Home() {
           markdown: string;
           suggestedTasks: { task_name: string; related_meeting: string }[];
         };
-        saveToCalendarHistory(payload.markdown);
+        saveToCalendarHistory(payload.markdown, payload.suggestedTasks);
         setSuggestedTasks(payload.suggestedTasks || []);
       } else {
         throw new Error(response.error || "Failed to process calendar.");
@@ -1845,6 +1857,7 @@ export default function Home() {
                         onClick={() => {
                           console.log("Opening timesheet:", item.date);
                           setViewingTimesheet(item);
+                          setIsAiDrawerOpen(false); // Close drawer to show modal
                         }}
                         className="group flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-indigo-500/50 hover:bg-white/10 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                       >
@@ -2005,41 +2018,97 @@ export default function Home() {
 
       {/* Timesheet Modal Overlay */}
       {viewingTimesheet && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#12121e] w-full max-w-3xl max-h-[90vh] rounded-3xl border border-white/10 flex flex-col shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
-            <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <Calendar className="h-5 w-5" />
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-[#0f111a] w-full max-w-3xl max-h-[92vh] rounded-[2.5rem] border border-white/10 flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-300 overflow-hidden relative">
+            
+            {/* High-visibility Close Button */}
+            <button 
+              onClick={() => setViewingTimesheet(null)}
+              className="absolute top-6 right-6 z-[210] p-3 bg-white/10 hover:bg-white/20 active:scale-90 rounded-full text-white transition-all border border-white/10 shadow-xl"
+              aria-label="Close modal"
+            >
+              <X className="h-6 w-6 stroke-[2.5]" />
+            </button>
+
+            <div className="p-8 border-b border-white/10 flex items-center bg-white/5">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+                  <Calendar className="h-6 w-6" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white leading-tight">Timecard Analysis</h2>
-                  <p className="text-xs text-white/40">{viewingTimesheet.date} • Generated from Image</p>
+                  <h2 className="text-2xl font-bold text-white tracking-tight leading-tight">Timecard Analysis</h2>
+                  <p className="text-sm text-white/40 font-medium">{viewingTimesheet.date} • Intelligence Extract</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setViewingTimesheet(null)}
-                className="p-2 hover:bg-white/10 rounded-xl text-white/40 hover:text-white transition-all shadow-sm"
-              >
-                <X className="h-6 w-6" />
-              </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 font-sans text-left bg-gradient-to-b from-transparent to-black/20">
+            <div className="flex-1 overflow-y-auto p-8 font-sans text-left bg-gradient-to-b from-transparent to-black/20">
                 <div className="prose prose-invert max-w-none text-white/90">
                   <ReactMarkdown>{viewingTimesheet.markdown}</ReactMarkdown>
                 </div>
+
+                {/* Suggested Tasks SECTION in Modal */}
+                {viewingTimesheet.suggestedTasks && viewingTimesheet.suggestedTasks.length > 0 && (
+                  <div className="mt-12 pt-8 border-t border-white/10">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-2 bg-indigo-500/20 rounded-xl">
+                        <Sparkles className="h-5 w-5 text-indigo-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-white">Suggested Focus Items</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-3">
+                      {viewingTimesheet.suggestedTasks.map((task, idx) => (
+                        <div 
+                          key={idx}
+                          className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between gap-4 group hover:bg-white/10 transition-all"
+                        >
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <span className="text-[10px] uppercase font-black text-indigo-400 tracking-widest font-mono">
+                              {task.related_meeting}
+                            </span>
+                            <span className="text-sm font-bold text-white/90 leading-tight truncate">
+                              {task.task_name}
+                            </span>
+                          </div>
+                          
+                          <button
+                            onClick={() => handleAddSuggestedTask(task, idx)}
+                            disabled={addedSuggestions.has(`${task.related_meeting}-${task.task_name}`)}
+                            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-lg ${
+                              addedSuggestions.has(`${task.related_meeting}-${task.task_name}`)
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-indigo-500/20'
+                            }`}
+                          >
+                            {addedSuggestions.has(`${task.related_meeting}-${task.task_name}`) ? (
+                              <>
+                                <Check className="h-4 w-4" />
+                                Added
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4" />
+                                Add
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
             </div>
 
-            <div className="p-6 bg-white/5 border-t border-white/10 flex gap-4">
+            <div className="p-8 bg-white/5 border-t border-white/10 flex gap-4">
               <button 
                 onClick={() => handleCopyTSV()}
-                className="flex-1 py-4 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-2xl transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-3"
+                className="flex-1 py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl transition-all active:scale-[0.98] shadow-[0_10px_30px_-10px_rgba(79,70,229,0.5)] flex items-center justify-center gap-4"
               >
-                {copiedIndex ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                {copiedIndex ? <Check className="h-6 w-6 stroke-[3]" /> : <Copy className="h-6 w-6" />}
                 <div className="flex flex-col items-start leading-tight">
-                  <span className="text-sm font-bold">{copiedIndex ? 'Copied Details!' : 'Copy Dataset'}</span>
-                  <span className="text-[10px] text-indigo-200">Export for Excel / Sheets</span>
+                  <span className="text-base font-black tracking-tight">{copiedIndex ? 'Copied Details!' : 'Export Dataset'}</span>
+                  <span className="text-xs text-indigo-200 font-medium opacity-70 italic">Ready for Excel / Sheets</span>
                 </div>
               </button>
             </div>
