@@ -33,8 +33,9 @@ suggested_tasks is an array of objects: { task_name (string), related_meeting (s
 
 Rules for extraction:
 1. Extract ALL scheduled events.
-2. For each meeting, ensure you provide the correct day_of_week.
-3. Return ONLY the JSON object.`;
+2. For each activity name, STRIP OUT noise like "Microsoft Teams Meeting", "Zoom Meeting", "Meeting Link", or "Microsoft Teams". Keep only the core meeting title.
+3. For each meeting, ensure you provide the correct day_of_week.
+4. Return ONLY the JSON object.`;
 
     const result = await model.generateContent([
       prompt,
@@ -86,8 +87,10 @@ Rules for extraction:
     const weeklyTotals: Record<string, number> = {};
     let totalWeeklyMeetingMinutes = 0;
 
+    const noiseRegex = /(Microsoft Teams Meeting|Zoom Meeting|Meeting Link|Microsoft Teams|Teams Meeting)/gi;
+
     for (const event of events) {
-      const activity = event.activity.trim();
+      const activity = event.activity.replace(noiseRegex, '').replace(/\s+/g, ' ').trim();
       const mins = event.duration_minutes || 0;
       weeklyTotals[activity] = (weeklyTotals[activity] || 0) + mins;
       totalWeeklyMeetingMinutes += mins;
@@ -100,7 +103,8 @@ Rules for extraction:
     for (const day of sortedDays) {
       let dailyMeetingMins = 0;
       for (const event of groupedData[day]) {
-        markdown += `| ${day} | ${event.activity} | ${(event.minutes / 60).toFixed(2)} |\n`;
+        const cleanActivity = event.activity.replace(noiseRegex, '').replace(/\s+/g, ' ').trim();
+        markdown += `| ${day} | ${cleanActivity} | ${(event.minutes / 60).toFixed(2)} |\n`;
         dailyMeetingMins += event.minutes;
       }
       const adminMins = Math.max(0, 480 - dailyMeetingMins);

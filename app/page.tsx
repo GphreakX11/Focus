@@ -119,6 +119,7 @@ export default function Home() {
   const [calendarHistory, setCalendarHistory] = useState<TimesheetHistory[]>([]);
   const [viewingTimesheet, setViewingTimesheet] = useState<TimesheetHistory | null>(null);
   const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(new Set());
+  const [editingRows, setEditingRows] = useState<{ day?: string; activity: string; hours: string; isHeader?: boolean; isSeparator?: boolean; id: string }[]>([]);
 
   const saveToCalendarHistory = (markdown: string, tasks?: { task_name: string, related_meeting: string }[]) => {
     const newEntry: TimesheetHistory = {
@@ -131,9 +132,32 @@ export default function Home() {
     setCalendarHistory(updated);
     localStorage.setItem('focus_timesheet_history', JSON.stringify(updated));
     setViewingTimesheet(newEntry);
-    // Auto-close drawer when opening a new timesheet
-    setIsAiDrawerOpen(false);
   };
+
+  useEffect(() => {
+    if (viewingTimesheet) {
+      const lines = viewingTimesheet.markdown.split('\n');
+      const rows = lines
+        .filter(l => l.startsWith('|'))
+        .filter(l => !l.includes('---')) // skip separator
+        .map((l, idx) => {
+          const cells = l.split('|').filter(s => s.trim()).map(s => s.trim());
+          const isDaily = cells.length === 3;
+          return {
+            id: `row-${idx}-${Date.now()}`,
+            day: isDaily ? cells[0] : undefined,
+            activity: isDaily ? cells[1] : cells[0],
+            hours: isDaily ? cells[2] : cells[1]
+          };
+        })
+        .filter(r => r.activity !== 'Activity' && r.activity !== 'Day' && r.activity !== 'Activity Description');
+      
+      setEditingRows(rows as any);
+      setIsAiDrawerOpen(false);
+    } else {
+      setEditingRows([]);
+    }
+  }, [viewingTimesheet]);
 
   const handleAddSuggestedTask = (task: { task_name: string, related_meeting: string }, idx: number) => {
     const textToSubmit = `[Prep for ${task.related_meeting}] ${task.task_name}`;
@@ -331,12 +355,26 @@ export default function Home() {
     }
   };
 
-  const handleCopyTSV = (content?: string) => {
-    // Priority: 1. Passed content, 2. viewingTimesheet markdown, 3. calendarResults (legacy)
-    const textToCopy = content || viewingTimesheet?.markdown || '';
-    if (!textToCopy) return;
+  const handleCopyTSV = () => {
+    if (editingRows.length === 0) return;
+    
+    // Re-generate markdown from editingRows
+    let markdown = "## Daily Breakdown\n\n| Day | Activity | Hours |\n| :--- | :--- | :--- |\n";
+    
+    // Find where weekly starts (divider)
+    const dailyRows = editingRows.filter(r => r.day);
+    const weeklyRows = editingRows.filter(r => !r.day);
 
-    navigator.clipboard.writeText(textToCopy).then(() => {
+    dailyRows.forEach(r => {
+      markdown += `| ${r.day} | ${r.activity} | ${r.hours} |\n`;
+    });
+
+    markdown += "\n---\n\n## Weekly Summary\n\n| Activity | Total Hours |\n| :--- | :--- |\n";
+    weeklyRows.forEach(r => {
+      markdown += `| ${r.activity} | ${r.hours} |\n`;
+    });
+
+    navigator.clipboard.writeText(markdown).then(() => {
       setCopiedIndex(true);
       setTimeout(() => setCopiedIndex(false), 2000);
     });
@@ -2043,8 +2081,69 @@ export default function Home() {
             </div>
             
             <div className="flex-1 overflow-y-auto p-8 font-sans text-left bg-gradient-to-b from-transparent to-black/20">
-                <div className="prose prose-invert max-w-none text-white/90">
-                  <ReactMarkdown>{viewingTimesheet.markdown}</ReactMarkdown>
+                <div className="overflow-x-auto rounded-3xl border border-white/10 mb-8 shadow-inner">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-white/5 text-[10px] uppercase text-white/30 tracking-widest">
+                      <tr>
+                        <th className="px-6 py-4 font-black">Day</th>
+                        <th className="px-6 py-4 font-black">Activity Description</th>
+                        <th className="px-6 py-4 font-black text-right">Hours</th>
+                        <th className="px-2 py-4 w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {editingRows.map((row, i) => (
+                        <tr key={row.id} className="group hover:bg-white/5 transition-all">
+                          <td className="px-6 py-3">
+                            <input 
+                              type="text"
+                              value={row.day || '-'}
+                              onChange={(e) => {
+                                const next = [...editingRows];
+                                next[i].day = e.target.value;
+                                setEditingRows(next);
+                              }}
+                              className="bg-transparent border-none outline-none text-white/40 font-bold focus:text-indigo-400 w-full transition-colors"
+                            />
+                          </td>
+                          <td className="px-6 py-3">
+                            <input 
+                              type="text"
+                              value={row.activity}
+                              onChange={(e) => {
+                                const next = [...editingRows];
+                                next[i].activity = e.target.value;
+                                setEditingRows(next);
+                              }}
+                              className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all"
+                            />
+                          </td>
+                          <td className="px-6 py-3 text-right">
+                            <input 
+                              type="text"
+                              value={row.hours}
+                              onChange={(e) => {
+                                const next = [...editingRows];
+                                next[i].hours = e.target.value;
+                                setEditingRows(next);
+                              }}
+                              className="bg-transparent border-none outline-none text-indigo-400 font-mono font-bold text-right w-16 focus:text-white transition-colors"
+                            />
+                          </td>
+                          <td className="px-2 py-3">
+                            <button 
+                              onClick={() => {
+                                setEditingRows(prev => prev.filter((_, idx) => idx !== i));
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 transition-all"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
 
                 {/* Suggested Tasks SECTION in Modal */}
@@ -2072,27 +2171,40 @@ export default function Home() {
                             </span>
                           </div>
                           
-                          <button
-                            onClick={() => handleAddSuggestedTask(task, idx)}
-                            disabled={addedSuggestions.has(`${task.related_meeting}-${task.task_name}`)}
-                            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-lg ${
-                              addedSuggestions.has(`${task.related_meeting}-${task.task_name}`)
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-indigo-500/20'
-                            }`}
-                          >
-                            {addedSuggestions.has(`${task.related_meeting}-${task.task_name}`) ? (
-                              <>
-                                <Check className="h-4 w-4" />
-                                Added
-                              </>
-                            ) : (
-                              <>
-                                <Plus className="h-4 w-4" />
-                                Add
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                const updated = { ...viewingTimesheet };
+                                updated.suggestedTasks = updated.suggestedTasks?.filter((_, i) => i !== idx);
+                                setViewingTimesheet(updated as any);
+                                // Also update history in localStorage if needed, but for now just temporary UI removal is usually fine
+                              }}
+                              className="p-2 text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleAddSuggestedTask(task, idx)}
+                              disabled={addedSuggestions.has(`${task.related_meeting}-${task.task_name}`)}
+                              className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-lg ${
+                                addedSuggestions.has(`${task.related_meeting}-${task.task_name}`)
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-indigo-500/20'
+                              }`}
+                            >
+                              {addedSuggestions.has(`${task.related_meeting}-${task.task_name}`) ? (
+                                <>
+                                  <Check className="h-4 w-4" />
+                                  Added
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4" />
+                                  Add
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
