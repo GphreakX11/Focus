@@ -34,8 +34,9 @@ suggested_tasks is an array of objects: { task_name (string), related_meeting (s
 Rules for extraction:
 1. Extract ALL scheduled events.
 2. For each activity name, STRIP OUT noise like "Microsoft Teams Meeting", "Zoom Meeting", "Meeting Link", or "Microsoft Teams". Keep only the core meeting title.
-3. For each meeting, ensure you provide the correct day_of_week.
-4. Return ONLY the JSON object.`;
+3. DO NOT use Markdown bolding (no **) or italics in any activity names or durations.
+4. For each meeting, ensure you provide the correct day_of_week.
+5. Return ONLY the JSON object.`;
 
     const result = await model.generateContent([
       prompt,
@@ -108,7 +109,7 @@ Rules for extraction:
         dailyMeetingMins += event.minutes;
       }
       const adminMins = Math.max(0, 480 - dailyMeetingMins);
-      markdown += `| ${day} | **Admin (Daily)** | **${(adminMins / 60).toFixed(2)}** |\n`;
+      markdown += `| ${day} | Admin (Daily) | ${(adminMins / 60).toFixed(2)} |\n`;
     }
 
     markdown += "\n---\n\n## Weekly Summary\n\n| Activity | Total Hours |\n| :--- | :--- |\n";
@@ -116,9 +117,9 @@ Rules for extraction:
       markdown += `| ${activity} | ${(mins / 60).toFixed(2)} |\n`;
     }
     
-    // Add Weekly Admin (Standard 40 hour week = 2400 mins)
+    // Add Weekly Admin
     const weeklyAdminMins = Math.max(0, 2400 - totalWeeklyMeetingMinutes);
-    markdown += `| **Weekly Admin** | **${(weeklyAdminMins / 60).toFixed(2)}** |\n`;
+    markdown += `| Weekly Admin | ${(weeklyAdminMins / 60).toFixed(2)} |\n`;
 
     return { 
       success: true, 

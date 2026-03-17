@@ -141,13 +141,15 @@ export default function Home() {
         .filter(l => l.startsWith('|'))
         .filter(l => !l.includes('---')) // skip separator
         .map((l, idx) => {
-          const cells = l.split('|').filter(s => s.trim()).map(s => s.trim());
+          const cells = l.split('|')
+            .filter(s => s.trim())
+            .map(s => s.trim().replace(/\*\*|__/g, '')); // Strip markdown decorators
           const isDaily = cells.length === 3;
           return {
             id: `row-${idx}-${Date.now()}`,
             day: isDaily ? cells[0] : undefined,
             activity: isDaily ? cells[1] : cells[0],
-            hours: isDaily ? cells[2] : cells[1]
+            hours: isDaily ? (cells[2] || '0.00') : (cells[1] || '0.00') // Guard against empty cells
           };
         })
         .filter(r => r.activity !== 'Activity' && r.activity !== 'Day' && r.activity !== 'Activity Description');
@@ -1935,24 +1937,33 @@ export default function Home() {
                     {suggestedTasks.map((task, idx) => (
                       <div 
                         key={idx}
-                        className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-start justify-between gap-3 group hover:bg-white/10 transition-all"
+                        className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-start justify-between gap-3 group hover:bg-white/10 transition-all relative overflow-hidden"
                       >
                         <div className="flex flex-col gap-1 min-w-0 flex-1">
-                          <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider font-mono truncate">
-                            FOR: {task.related_meeting}
+                          <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-widest font-mono truncate">
+                            {task.related_meeting}
                           </span>
                           <span className="text-sm font-semibold text-white/90 leading-tight">
                             {task.task_name}
                           </span>
                         </div>
                         
-                        <button
-                          onClick={() => handleAddSuggestedTask(task, idx)}
-                          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 mt-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[10px] uppercase tracking-wider transition-all active:scale-95 shadow-[0_0_15px_rgba(99,102,241,0.2)]"
-                        >
-                          <Check className="h-3 w-3 stroke-[3]" />
-                          Add
-                        </button>
+                        <div className="flex flex-col gap-2 mt-1">
+                          <button
+                            onClick={() => handleAddSuggestedTask(task, idx)}
+                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[10px] uppercase tracking-wider transition-all active:scale-95 shadow-[0_0_15px_rgba(99,102,241,0.2)]"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add
+                          </button>
+                          <button
+                            onClick={() => setSuggestedTasks(prev => prev.filter((_, i) => i !== idx))}
+                            className="shrink-0 flex items-center justify-center p-1.5 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/20 hover:text-red-400 transition-all border border-transparent hover:border-red-500/30"
+                            title="Remove suggestion"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2106,16 +2117,23 @@ export default function Home() {
                               className="bg-transparent border-none outline-none text-white/40 font-bold focus:text-indigo-400 w-full transition-colors"
                             />
                           </td>
-                          <td className="px-6 py-3">
-                            <input 
-                              type="text"
+                          <td className="px-6 py-4">
+                            <textarea 
                               value={row.activity}
+                              rows={1}
                               onChange={(e) => {
                                 const next = [...editingRows];
                                 next[i].activity = e.target.value;
                                 setEditingRows(next);
+                                // Auto-resize height logic simple
+                                e.target.style.height = 'auto';
+                                e.target.style.height = e.target.scrollHeight + 'px';
                               }}
-                              className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all"
+                              className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all resize-none min-h-[1.5rem] leading-relaxed block overflow-hidden"
+                              onFocus={(e) => {
+                                e.target.style.height = 'auto';
+                                e.target.style.height = e.target.scrollHeight + 'px';
+                              }}
                             />
                           </td>
                           <td className="px-6 py-3 text-right">
