@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
   generateBuildId: async () => {
     // Generate a custom build ID on every deployment to force cache invalidation
     return `build-${Date.now()}`;

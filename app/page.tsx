@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download } from 'lucide-react';
+import { analyzeCalendar } from './calendar-actions';
 
 type Habit = {
   id: string;
@@ -271,18 +272,12 @@ export default function Home() {
     setSuggestedTasks([]);
     
     try {
-      const apiResponse = await fetch('/api/analyze-calendar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64Image: calendarImage })
-      });
+      if (!calendarImage) throw new Error("Please upload an image first.");
 
-      if (!apiResponse.ok) {
-        const errorData = await apiResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server responded with ${apiResponse.status}`);
-      }
+      const formData = new FormData();
+      formData.append('image', calendarImage);
 
-      const response = await apiResponse.json();
+      const response = await analyzeCalendar(formData);
       
       if (response.success && response.data) {
         const payload = response.data as { 
@@ -296,7 +291,8 @@ export default function Home() {
       }
     } catch (err: any) {
       console.error("Calendar Analysis Error:", err);
-      setCalendarError(err.message || 'Unknown error');
+      // Surface the actual error message to the UI
+      setCalendarError(err.message || String(err));
     } finally {
       setIsAnalyzingCalendar(false);
       isCalendarProcessingRef.current = false;
