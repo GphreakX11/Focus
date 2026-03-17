@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw } from 'lucide-react';
+import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download } from 'lucide-react';
+import { analyzeCalendar } from './actions';
 
 type Habit = {
   id: string;
@@ -99,6 +100,14 @@ export default function Home() {
   
   const [completion, setCompletion] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Calendar Analyzer State
+  const [aiTab, setAiTab] = useState<'meetings' | 'calendar'>('meetings');
+  const [calendarImage, setCalendarImage] = useState<string | null>(null);
+  const [isAnalyzingCalendar, setIsAnalyzingCalendar] = useState(false);
+  const [calendarResults, setCalendarResults] = useState<{ activity: string; hours: number }[] | null>(null);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState(false);
 
   const handleAnalyze = async () => {
     if (!transcriptInput.trim() || isAnalyzing) return;
@@ -218,9 +227,65 @@ export default function Home() {
     }
   };
 
+  const handleAnalyzeCalendar = async () => {
+    if (!calendarImage || isAnalyzingCalendar) return;
+    setIsAnalyzingCalendar(true);
+    setCalendarError(null);
+    setCalendarResults(null);
+    
+    try {
+      const response = await analyzeCalendar(calendarImage);
+      if (response.success && response.data) {
+        setCalendarResults(response.data);
+      } else {
+        throw new Error(response.error || "Failed to process calendar.");
+      }
+    } catch (err: any) {
+      console.error("Calendar Analysis Error:", err);
+      setCalendarError(err.message || 'Unknown error');
+    } finally {
+      setIsAnalyzingCalendar(false);
+    }
+  };
+
+  const handleCopyTSV = () => {
+    if (!calendarResults) return;
+    const tsvData = ["Activity\tHours", ...calendarResults.map(r => `${r.activity}\t${r.hours}`)].join("\n");
+    navigator.clipboard.writeText(tsvData);
+    setCopiedIndex(true);
+    setTimeout(() => setCopiedIndex(false), 2000);
+  };
+
+  const handleDownloadCSV = () => {
+    if (!calendarResults) return;
+    const csvData = ["Activity,Hours", ...calendarResults.map(r => `"${r.activity.replace(/"/g, '""')}",${r.hours}`)].join("\n");
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = "Weekly_Timesheet.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCalendarImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCalendarImage(event.target?.result as string);
+      setCalendarResults(null); 
+      setCalendarError(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Standby / Media Session State
-  const audioRef = useRef(null);
-  const [wakeLock, setWakeLock] = useState(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [wakeLock, setWakeLock] = useState<any>(null);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -1433,134 +1498,263 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="flex flex-col gap-6 font-sans">
-          {/* User Name Input */}
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 ml-1">Your Name (for context)</label>
-            <div className="relative group">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20 group-focus-within:text-indigo-400 transition-colors" />
-              <input 
-                type="text"
-                value={userName}
-                onChange={(e) => {
-                  setUserName(e.target.value);
-                  localStorage.setItem('focus_user_name', e.target.value);
-                }}
-                placeholder="How should Gemini address you?"
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-10 pr-4 text-white placeholder:text-white/20 outline-none focus:border-indigo-500/50 focus:bg-white/10 transition-all"
-              />
-            </div>
-          </div>
+        {/* Tab Switcher */}
+        <div className="flex gap-2 mb-6 bg-white/5 p-1 rounded-2xl">
+          <button 
+            onClick={() => setAiTab('meetings')}
+            className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${aiTab === 'meetings' ? 'bg-indigo-500 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+          >
+            Meetings
+          </button>
+          <button 
+            onClick={() => setAiTab('calendar')}
+            className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${aiTab === 'calendar' ? 'bg-indigo-500 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+          >
+            Calendar
+          </button>
+        </div>
 
-          {/* Transcript Area */}
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 ml-1">Meeting Transcript</label>
-            <div 
-              onDragOver={handleAiDragOver}
-              onDrop={handleAiDrop}
-              className="relative flex flex-col gap-3"
-            >
-              <textarea 
-                value={transcriptInput}
-                onChange={(e) => setTranscriptInput(e.target.value)}
-                placeholder="Paste transcript or drag .txt/.csv here..."
-                className="w-full h-48 bg-white/5 border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/20 outline-none focus:border-indigo-500/50 focus:bg-white/10 transition-all resize-none text-sm"
-              />
-              <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-6 font-sans">
+          {aiTab === 'meetings' ? (
+            <>
+              {/* User Name Input */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 ml-1">Your Name (for context)</label>
+                <div className="relative group">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20 group-focus-within:text-indigo-400 transition-colors" />
+                  <input 
+                    type="text"
+                    value={userName}
+                    onChange={(e) => {
+                      setUserName(e.target.value);
+                      localStorage.setItem('focus_user_name', e.target.value);
+                    }}
+                    placeholder="How should Gemini address you?"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-10 pr-4 text-white placeholder:text-white/20 outline-none focus:border-indigo-500/50 focus:bg-white/10 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Transcript Area */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 ml-1">Meeting Transcript</label>
+                <div 
+                  onDragOver={handleAiDragOver}
+                  onDrop={handleAiDrop}
+                  className="relative flex flex-col gap-3"
+                >
+                  <textarea 
+                    value={transcriptInput}
+                    onChange={(e) => setTranscriptInput(e.target.value)}
+                    placeholder="Paste transcript or drag .txt/.csv here..."
+                    className="w-full h-48 bg-white/5 border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/20 outline-none focus:border-indigo-500/50 focus:bg-white/10 transition-all resize-none text-sm"
+                  />
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="file" 
+                      id="ai-file-upload" 
+                      className="hidden" 
+                      accept=".txt,.csv"
+                      onChange={(e) => handleFileUpload(e)}
+                    />
+                    <label 
+                      htmlFor="ai-file-upload"
+                      className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-white/10 rounded-2xl text-white/40 hover:text-white hover:border-indigo-500/50 hover:bg-white/5 transition-all cursor-pointer text-xs"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Transcript
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={handleAnalyze}
+                disabled={!transcriptInput.trim() || isAnalyzing}
+                className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${!transcriptInput.trim() || isAnalyzing ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 active:scale-[0.98] hover:bg-indigo-400'}`}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <RotateCcw className="h-5 w-5 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5" />
+                    Analyze Meeting
+                  </>
+                )}
+              </button>
+
+              {/* History List */}
+              <div className="flex flex-col gap-4 mt-4 mb-10">
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 flex items-center gap-2">
+                    <History className="h-3 w-3" />
+                    Past Meetings
+                  </label>
+                  {analysisHistory.length > 0 && (
+                    <button 
+                      onClick={() => { setAnalysisHistory([]); localStorage.removeItem('focus_ai_history'); }}
+                      className="text-[9px] uppercase font-bold text-red-400/60 hover:text-red-400 transition-colors"
+                    >
+                      Clear Meetings
+                    </button>
+                  )}
+                </div>
+                
+                {analysisHistory.length === 0 ? (
+                  <div className="text-center py-10 text-white/10 flex flex-col items-center gap-2 grayscale">
+                    <FileText className="h-10 w-10 opacity-20" />
+                    <span className="text-xs font-medium">No history yet</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {analysisHistory.map(item => (
+                      <div 
+                        key={item.id}
+                        className="group bg-white/5 border border-white/5 rounded-2xl p-4 hover:bg-white/10 hover:border-white/10 transition-all cursor-default"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-bold text-white/20">{item.date}</span>
+                          <button 
+                             onClick={() => {
+                               const updated = analysisHistory.filter(h => h.id !== item.id);
+                               setAnalysisHistory(updated);
+                               localStorage.setItem('focus_ai_history', JSON.stringify(updated));
+                             }}
+                             className="opacity-40 hover:opacity-100 p-1 text-red-400 hover:text-red-400 transition-all"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <h3 className="text-xs font-bold text-white/80 mb-2 truncate pr-4">{item.title}</h3>
+                        <p className="text-[11px] text-white/40 line-clamp-3 leading-relaxed font-sans">
+                          {item.content}
+                        </p>
+                        <button 
+                          onClick={() => setViewingAnalysis(item)}
+                          className="mt-3 text-[10px] font-bold text-indigo-400/80 hover:text-indigo-400 flex items-center gap-1"
+                        >
+                          View Full Analysis →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            // Calendar Analyzer UI
+            <div className="flex flex-col gap-4">
+              <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4 flex gap-3 text-indigo-200 text-sm">
+                <Calendar className="h-5 w-5 shrink-0 mt-0.5" />
+                <p>Upload a screenshot of your weekly calendar to automatically extract meetings and generate your timesheet.</p>
+              </div>
+
+              <div className="flex flex-col gap-2">
                 <input 
                   type="file" 
-                  id="ai-file-upload" 
+                  id="calendar-upload" 
                   className="hidden" 
-                  accept=".txt,.csv"
-                  onChange={(e) => handleFileUpload(e)}
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleCalendarImageUpload}
                 />
                 <label 
-                  htmlFor="ai-file-upload"
-                  className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-white/10 rounded-2xl text-white/40 hover:text-white hover:border-indigo-500/50 hover:bg-white/5 transition-all cursor-pointer text-xs"
+                  htmlFor="calendar-upload"
+                  className="w-full flex items-center justify-center gap-2 py-4 border border-white/10 bg-white/5 rounded-2xl text-white hover:border-indigo-500/50 hover:bg-white/10 transition-all cursor-pointer font-bold shadow-md hover:shadow-lg active:scale-[0.98]"
                 >
-                  <Upload className="h-4 w-4" />
-                  Upload Transcript
+                  <Camera className="h-5 w-5 text-indigo-400" />
+                  Upload / Take Picture
                 </label>
               </div>
-            </div>
-          </div>
 
-          <button 
-            onClick={handleAnalyze}
-            disabled={!transcriptInput.trim() || isAnalyzing}
-            className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${!transcriptInput.trim() || isAnalyzing ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 active:scale-[0.98] hover:bg-indigo-400'}`}
-          >
-            {isAnalyzing ? (
-              <>
-                <RotateCcw className="h-5 w-5 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-5 w-5" />
-                Analyze Meeting
-              </>
-            )}
-          </button>
-
-          {/* History List */}
-          <div className="flex flex-col gap-4 mt-4 mb-10">
-            <div className="flex items-center justify-between px-1">
-              <label className="text-[10px] uppercase font-bold tracking-widest text-white/40 flex items-center gap-2">
-                <History className="h-3 w-3" />
-                Past Meetings
-              </label>
-              {analysisHistory.length > 0 && (
-                <button 
-                  onClick={() => { setAnalysisHistory([]); localStorage.removeItem('focus_ai_history'); }}
-                  className="text-[9px] uppercase font-bold text-red-400/60 hover:text-red-400 transition-colors"
-                >
-                  Clear Meetings
-                </button>
-
-              )}
-            </div>
-            
-            {analysisHistory.length === 0 ? (
-              <div className="text-center py-10 text-white/10 flex flex-col items-center gap-2 grayscale">
-                <FileText className="h-10 w-10 opacity-20" />
-                <span className="text-xs font-medium">No history yet</span>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {analysisHistory.map(item => (
-                  <div 
-                    key={item.id}
-                    className="group bg-white/5 border border-white/5 rounded-2xl p-4 hover:bg-white/10 hover:border-white/10 transition-all cursor-default"
+              {calendarImage && (
+                <div className="relative rounded-2xl overflow-hidden border border-white/10 h-32 w-full flex items-center justify-center bg-black/40">
+                  <img src={calendarImage} alt="Calendar Preview" className="h-full object-contain" />
+                  <button 
+                    onClick={() => { setCalendarImage(null); setCalendarResults(null); }}
+                    className="absolute top-2 right-2 p-1 bg-black/50 text-white/70 hover:text-white rounded-lg backdrop-blur"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-white/20">{item.date}</span>
-                      <button 
-                         onClick={() => {
-                           const updated = analysisHistory.filter(h => h.id !== item.id);
-                           setAnalysisHistory(updated);
-                           localStorage.setItem('focus_ai_history', JSON.stringify(updated));
-                         }}
-                         className="opacity-40 hover:opacity-100 p-1 text-red-400 hover:text-red-400 transition-all"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <h3 className="text-xs font-bold text-white/80 mb-2 truncate pr-4">{item.title}</h3>
-                    <p className="text-[11px] text-white/40 line-clamp-3 leading-relaxed font-sans">
-                      {item.content}
-                    </p>
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              <button 
+                onClick={handleAnalyzeCalendar}
+                disabled={!calendarImage || isAnalyzingCalendar}
+                className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all mt-2 ${!calendarImage || isAnalyzingCalendar ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5' : 'bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)] active:scale-[0.98] hover:bg-indigo-400 border border-indigo-400/50'}`}
+              >
+                {isAnalyzingCalendar ? (
+                  <>
+                    <RotateCcw className="h-5 w-5 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5 text-indigo-200" />
+                    Generate Timesheet
+                  </>
+                )}
+              </button>
+
+              {calendarError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center mt-2">
+                  {calendarError}
+                </div>
+              )}
+
+              {calendarResults && (
+                <div className="mt-4 flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs uppercase bg-white/5 text-white/50 border-b border-white/10">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold">Activity</th>
+                          <th className="px-4 py-3 font-semibold text-right w-24">Hours</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-white/90">
+                        {calendarResults.map((row, i) => (
+                          <tr key={i} className="hover:bg-white/5 transition-colors">
+                            <td className="px-4 py-2 font-medium">{row.activity}</td>
+                            <td className="px-4 py-2 text-right font-mono text-indigo-300">{row.hours.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t border-white/10 bg-black/20 font-bold text-white">
+                        <tr>
+                          <td className="px-4 py-3">Total</td>
+                          <td className="px-4 py-3 text-right text-indigo-400">
+                            {calendarResults.reduce((sum, row) => sum + row.hours, 0).toFixed(2)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  <div className="flex gap-3 mt-1 mb-8">
                     <button 
-                      onClick={() => setViewingAnalysis(item)}
-                      className="mt-3 text-[10px] font-bold text-indigo-400/80 hover:text-indigo-400 flex items-center gap-1"
+                      onClick={handleCopyTSV}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 transition-all font-medium text-xs sm:text-sm active:scale-95"
                     >
-                      View Full Analysis →
+                      {copiedIndex ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                      {copiedIndex ? 'Copied!' : 'Copy for Excel'}
+                    </button>
+                    <button 
+                      onClick={handleDownloadCSV}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 transition-all font-medium text-xs sm:text-sm active:scale-95"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download CSV
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

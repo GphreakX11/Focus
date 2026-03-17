@@ -11,6 +11,7 @@
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",
     "@ai-sdk/react": "^3.0.118",
+    "@google/generative-ai": "^0.24.1",
     "ai": "^6.0.116",
     "lucide-react": "^0.577.0",
     "next": "^16.1.6",
