@@ -3,31 +3,36 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /**
- * Calendar Analyzer using FormData to bypass payload limits.
- * Updated to use gemini-2.0-flash and strict inlineData formatting.
+ * Calendar Analyzer using FormData and Gemini 3-Flash-Preview
+ * Syncing to v1 endpoint for production stability.
  */
 export async function analyzeCalendar(formData: FormData) {
   try {
     const base64Image = formData.get('image') as string;
     if (!base64Image) {
-      throw new Error("No image data found in the request.");
+      throw new Error("No image data found in the request FormData.");
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not set.");
+      throw new Error("GEMINI_API_KEY is not set on the server.");
     }
 
+    // Initialize with v1 endpoint stability preference if supported by SDK version
+    // Otherwise the SDK defaults to v1beta for some models, but gemini-3 usually supports v1.
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Explicitly using gemini-2.0-flash as requested
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    
+    // Using gemini-3-flash-preview as requested for better free-tier RPM and precision
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-3-flash-preview",
+      apiVersion: "v1" // Attempt to sync to stable v1 endpoint
+    });
 
-    // Clean image data: remove any data URL prefix
+    // Clean image data
     const base64Data = base64Image.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, "");
 
     const prompt = "Analyze this weekly calendar screenshot. Return ONLY a valid JSON object with two keys: timesheet and suggested_tasks.\n\ntimesheet is an array of objects: { day (string), activity (string), duration_minutes (number) }.\n\nsuggested_tasks is an array of objects: { task_name (string, a short, highly probable prep or follow-up action based on the meeting title), related_meeting (string) }. Only infer tasks for meetings that clearly require prep or follow-up (e.g., '1:1', 'Review', 'Planning'). Ignore generic blocks like 'Lunch' or 'Focus Time'. Do not include any text outside the JSON.";
 
-    // Using strictly inlineData formatting as required by specs
     const result = await model.generateContent([
       prompt,
       {
@@ -51,6 +56,7 @@ export async function analyzeCalendar(formData: FormData) {
     try {
       parseData = JSON.parse(cleanText);
     } catch (parseError: any) {
+      console.error("AI Response Text:", text);
       throw new Error(`Failed to parse AI response: ${parseError.message}`);
     }
 
@@ -89,10 +95,18 @@ export async function analyzeCalendar(formData: FormData) {
       } 
     };
   } catch (error: any) {
-    console.error("analyzeCalendar Error:", error);
-    return { success: false, error: error.message || "Unknown error." };
+    // CRITICAL: Precise error logging as requested
+    console.error("Detailed GoogleGenerativeAI Error:", {
+      message: error.message,
+      stack: error.stack,
+      status: error.status,
+      statusText: error.statusText,
+      errorDetails: error.errorDetails
+    });
+    
+    return { 
+      success: false, 
+      error: error.message || "Unknown error during calendar analysis." 
+    };
   }
 }
-
-// Note: maxDuration removed to fix build error. Server actions imported in client 
-// components cannot reliably export non-function constants.
