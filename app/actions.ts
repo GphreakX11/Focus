@@ -10,7 +10,7 @@ export async function analyzeCalendar(base64Image: string) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // Remove any data URL prefix if present e.g. "data:image/png;base64,"
     const base64Data = base64Image.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, "");
