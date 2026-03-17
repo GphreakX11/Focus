@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /**
  * Calendar Analyzer using FormData and Gemini 3-Flash-Preview.
- * Updated to support Daily Breakdown and History generation.
+ * Updated to support Dual Datasets: Daily Breakdown + Weekly Summary.
  */
 export async function analyzeCalendar(formData: FormData) {
   try {
@@ -20,24 +20,21 @@ export async function analyzeCalendar(formData: FormData) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-3-flash-preview",
-      apiVersion: "v1"
+      model: "gemini-3-flash-preview"
     });
 
     const base64Data = base64Image.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, "");
 
-    // Updated prompt to include day_of_week as requested
     const prompt = `Analyze this weekly calendar screenshot. Return ONLY a valid JSON object with two keys: timesheet and suggested_tasks.
 
-timesheet is an array of objects: { day_of_week (string, e.g. 'Monday'), activity (string), date (string), duration_minutes (number) }.
+timesheet is an array of objects: { day_of_week (string, e.g. 'Monday'), activity (string), duration_minutes (number) }.
 
 suggested_tasks is an array of objects: { task_name (string), related_meeting (string) }. 
 
 Rules for extraction:
 1. Extract ALL scheduled events.
 2. For each meeting, ensure you provide the correct day_of_week.
-3. Ignore generic blocks like 'Lunch' or 'Focus Time' for suggested_tasks, but INCLUDE them in timesheet if they are on the calendar.
-4. Return ONLY the JSON object.`;
+3. Return ONLY the JSON object.`;
 
     const result = await model.generateContent([
       prompt,
@@ -72,7 +69,7 @@ Rules for extraction:
 
     const events = parseData.timesheet;
     
-    // Group by Day of Week
+    // 1. Process Daily Dataset
     const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const groupedData: Record<string, { activity: string; minutes: number }[]> = {};
 
@@ -85,45 +82,50 @@ Rules for extraction:
       });
     }
 
-    // Generate Markdown Table with Daily Breakdowns
-    let markdownTable = "| Day | Activity | Hours |\n| :--- | :--- | :--- |\n";
-    
-    // Sort and process by day
+    // 2. Process Weekly Totals
+    const weeklyTotals: Record<string, number> = {};
+    let totalWeeklyMeetingMinutes = 0;
+
+    for (const event of events) {
+      const activity = event.activity.trim();
+      const mins = event.duration_minutes || 0;
+      weeklyTotals[activity] = (weeklyTotals[activity] || 0) + mins;
+      totalWeeklyMeetingMinutes += mins;
+    }
+
+    // Generate Combined Markdown
+    let markdown = "## Daily Breakdown\n\n| Day | Activity | Hours |\n| :--- | :--- | :--- |\n";
     const sortedDays = Object.keys(groupedData).sort((a, b) => daysOrder.indexOf(a) - daysOrder.indexOf(b));
 
     for (const day of sortedDays) {
-      const dayEvents = groupedData[day];
-      let totalMeetingMinutes = 0;
-      
-      // Add individual activity rows for the day
-      for (const event of dayEvents) {
-        const hours = (event.minutes / 60).toFixed(2);
-        markdownTable += `| ${day} | ${event.activity} | ${hours} |\n`;
-        totalMeetingMinutes += event.minutes;
+      let dailyMeetingMins = 0;
+      for (const event of groupedData[day]) {
+        markdown += `| ${day} | ${event.activity} | ${(event.minutes / 60).toFixed(2)} |\n`;
+        dailyMeetingMins += event.minutes;
       }
-
-      // Calculate Admin time for this specific day (8 hours baseline = 480 mins)
-      const adminMinutes = Math.max(0, 480 - totalMeetingMinutes);
-      const adminHours = (adminMinutes / 60).toFixed(2);
-      markdownTable += `| ${day} | **Admin** | **${adminHours}** |\n`;
-      
-      // Add a separator line in markdown? Actually standard tables don't have separators, 
-      // but we'll keep the Day column filled to make it clear.
+      const adminMins = Math.max(0, 480 - dailyMeetingMins);
+      markdown += `| ${day} | **Admin (Daily)** | **${(adminMins / 60).toFixed(2)}** |\n`;
     }
+
+    markdown += "\n---\n\n## Weekly Summary\n\n| Activity | Total Hours |\n| :--- | :--- |\n";
+    for (const [activity, mins] of Object.entries(weeklyTotals)) {
+      markdown += `| ${activity} | ${(mins / 60).toFixed(2)} |\n`;
+    }
+    
+    // Add Weekly Admin (Standard 40 hour week = 2400 mins)
+    const weeklyAdminMins = Math.max(0, 2400 - totalWeeklyMeetingMinutes);
+    markdown += `| **Weekly Admin** | **${(weeklyAdminMins / 60).toFixed(2)}** |\n`;
 
     return { 
       success: true, 
       data: { 
-        markdownTable,
+        markdown,
         suggestedTasks: parseData.suggested_tasks || [] 
       } 
     };
   } catch (error: any) {
-    console.error("Detailed GoogleGenerativeAI Error:", error);
-    return { 
-      success: false, 
-      error: error.message || "Unknown error during calendar analysis." 
-    };
+    console.error("Calendar Action Error:", error);
+    return { success: false, error: error.message || "Unknown error." };
   }
 }
 

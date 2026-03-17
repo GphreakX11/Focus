@@ -301,10 +301,10 @@ export default function Home() {
       
       if (response.success && response.data) {
         const payload = response.data as { 
-          markdownTable: string;
+          markdown: string;
           suggestedTasks: { task_name: string; related_meeting: string }[];
         };
-        saveToCalendarHistory(payload.markdownTable);
+        saveToCalendarHistory(payload.markdown);
         setSuggestedTasks(payload.suggestedTasks || []);
       } else {
         throw new Error(response.error || "Failed to process calendar.");
@@ -320,11 +320,14 @@ export default function Home() {
   };
 
   const handleCopyTSV = (content?: string) => {
-    const textToCopy = content || (viewingTimesheet?.markdown || "");
+    // Priority: 1. Passed content, 2. viewingTimesheet markdown, 3. calendarResults (legacy)
+    const textToCopy = content || viewingTimesheet?.markdown || '';
     if (!textToCopy) return;
-    navigator.clipboard.writeText(textToCopy);
-    setCopiedIndex(true);
-    setTimeout(() => setCopiedIndex(false), 2000);
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      setCopiedIndex(true);
+      setTimeout(() => setCopiedIndex(false), 2000);
+    });
   };
 
   const handleDownloadCSV = () => {
@@ -1839,21 +1842,27 @@ export default function Home() {
                     {calendarHistory.map((item) => (
                       <div 
                         key={item.id}
-                        onClick={() => setViewingTimesheet(item)}
-                        className="group flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-indigo-500/30 hover:bg-white/10 transition-all cursor-pointer"
+                        onClick={() => {
+                          console.log("Opening timesheet:", item.date);
+                          setViewingTimesheet(item);
+                        }}
+                        className="group flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-indigo-500/50 hover:bg-white/10 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
-                            <FileText className="h-4 w-4" />
+                        <div className="flex items-center gap-4">
+                          <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+                            <FileText className="h-5 w-5" />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-white/80">Timesheet Generated</p>
-                            <p className="text-[10px] text-white/40">{item.date}</p>
+                            <p className="text-sm font-bold text-white/90">Timesheet Summary</p>
+                            <p className="text-[11px] text-white/40 font-medium tracking-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
+                              {item.date} • Last Generated
+                            </p>
                           </div>
                         </div>
-                        <button className="opacity-0 group-hover:opacity-100 p-2 text-white/40 hover:text-white transition-all">
-                          <Download className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                          <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider pr-1">View</span>
+                          <RotateCcw className="h-3.5 w-3.5 text-indigo-400" />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1997,26 +2006,26 @@ export default function Home() {
       {/* Timesheet Modal Overlay */}
       {viewingTimesheet && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#12121e] w-full max-w-2xl max-h-[90vh] rounded-3xl border border-white/10 flex flex-col shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
+          <div className="bg-[#12121e] w-full max-w-3xl max-h-[90vh] rounded-3xl border border-white/10 flex flex-col shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
             <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
                   <Calendar className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white leading-tight">Weekly Timesheet</h2>
-                  <p className="text-xs text-white/40">{viewingTimesheet.date}</p>
+                  <h2 className="text-xl font-bold text-white leading-tight">Timecard Analysis</h2>
+                  <p className="text-xs text-white/40">{viewingTimesheet.date} • Generated from Image</p>
                 </div>
               </div>
               <button 
                 onClick={() => setViewingTimesheet(null)}
-                className="p-2 hover:bg-white/10 rounded-xl text-white/40 hover:text-white transition-all"
+                className="p-2 hover:bg-white/10 rounded-xl text-white/40 hover:text-white transition-all shadow-sm"
               >
                 <X className="h-6 w-6" />
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 font-sans text-left">
+            <div className="flex-1 overflow-y-auto p-6 font-sans text-left bg-gradient-to-b from-transparent to-black/20">
                 <div className="prose prose-invert max-w-none text-white/90">
                   <ReactMarkdown>{viewingTimesheet.markdown}</ReactMarkdown>
                 </div>
@@ -2025,10 +2034,13 @@ export default function Home() {
             <div className="p-6 bg-white/5 border-t border-white/10 flex gap-4">
               <button 
                 onClick={() => handleCopyTSV()}
-                className="flex-1 py-4 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-2xl transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-2xl transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-3"
               >
                 {copiedIndex ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-                {copiedIndex ? 'Copied to Clipboard!' : 'Copy Markdown Table'}
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-sm font-bold">{copiedIndex ? 'Copied Details!' : 'Copy Dataset'}</span>
+                  <span className="text-[10px] text-indigo-200">Export for Excel / Sheets</span>
+                </div>
               </button>
             </div>
           </div>
