@@ -144,14 +144,32 @@ export default function Home() {
           const cells = l.split('|')
             .filter(s => s.trim())
             .map(s => s.trim().replace(/\*\*|__/g, '')); // Strip markdown decorators
-          const isDaily = cells.length === 3;
+          
+          if (cells.length < 2) return null;
+
+          let day = cells.length === 3 ? cells[0] : undefined;
+          let activity = cells.length === 3 ? cells[1] : cells[0];
+          let hours = cells.length === 3 ? cells[2] : cells[1];
+
+          // SELF-CORRECTION: If hours contains non-numeric text (like "Wraithwatch"), it shifted.
+          // This happens when Gemini puts a note in the third column or name is split.
+          const isNumeric = /^-?\d*\.?\d+$/.test(hours || "");
+          if (!isNumeric && hours && hours !== "0.00" && hours !== "0") {
+            // It's likely the activity name continued here or shifted
+            activity = `${activity} ${hours}`.trim();
+            hours = "0.00"; // Fallback
+          }
+
+          if (day === '-') day = undefined;
+
           return {
             id: `row-${idx}-${Date.now()}`,
-            day: isDaily ? cells[0] : undefined,
-            activity: isDaily ? cells[1] : cells[0],
-            hours: isDaily ? (cells[2] || '0.00') : (cells[1] || '0.00') // Guard against empty cells
+            day,
+            activity,
+            hours: hours || '0.00'
           };
         })
+        .filter(r => r !== null)
         .filter(r => r.activity !== 'Activity' && r.activity !== 'Day' && r.activity !== 'Activity Description');
       
       setEditingRows(rows as any);

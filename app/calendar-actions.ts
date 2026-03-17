@@ -32,11 +32,12 @@ timesheet is an array of objects: { day_of_week (string, e.g. 'Monday'), activit
 suggested_tasks is an array of objects: { task_name (string), related_meeting (string) }. 
 
 Rules for extraction:
-1. Extract ALL scheduled events.
-2. For each activity name, STRIP OUT noise like "Microsoft Teams Meeting", "Zoom Meeting", "Meeting Link", or "Microsoft Teams". Keep only the core meeting title.
+1. Extract ALL scheduled events. Provide the FULL, complete meeting title (e.g. "Wraithwatch Weekly Sync" instead of just "Wraithw").
+2. For each activity name, STRIP OUT platform noise like "Microsoft Teams Meeting", "Zoom Meeting", "Meeting Link", or "Microsoft Teams" ONLY. Do not strip actual project names or meeting topics.
 3. DO NOT use Markdown bolding (no **) or italics in any activity names or durations.
-4. For each meeting, ensure you provide the correct day_of_week.
-5. Return ONLY the JSON object.`;
+4. The duration_minutes MUST be a number representing the meeting length. Do not put text in this field.
+5. For each meeting, ensure you provide the correct day_of_week based on the visual layout.
+6. Return ONLY the JSON object.`;
 
     const result = await model.generateContent([
       prompt,
@@ -91,8 +92,12 @@ Rules for extraction:
     const noiseRegex = /(Microsoft Teams Meeting|Zoom Meeting|Meeting Link|Microsoft Teams|Teams Meeting)/gi;
 
     for (const event of events) {
-      const activity = event.activity.replace(noiseRegex, '').replace(/\s+/g, ' ').trim();
-      const mins = event.duration_minutes || 0;
+      const activity = (event.activity || "Unknown Activity")
+        .replace(noiseRegex, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\*/g, '')
+        .trim();
+      const mins = Number(event.duration_minutes) || 0;
       weeklyTotals[activity] = (weeklyTotals[activity] || 0) + mins;
       totalWeeklyMeetingMinutes += mins;
     }
