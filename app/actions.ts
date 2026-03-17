@@ -15,7 +15,7 @@ export async function analyzeCalendar(base64Image: string) {
     // Remove any data URL prefix if present e.g. "data:image/png;base64,"
     const base64Data = base64Image.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, "");
 
-    const prompt = "Analyze this weekly calendar screenshot. Extract every single scheduled event. Return ONLY a valid JSON array of objects. Each object must have: day (string, e.g., 'Monday'), activity (string, the name of the meeting), and duration_minutes (number, the exact length of the meeting in minutes). Do not include any markdown, explanation, or conversational text.";
+    const prompt = "Analyze this weekly calendar screenshot. Return ONLY a valid JSON object with two keys: timesheet and suggested_tasks.\n\ntimesheet is an array of objects: { day (string), activity (string), duration_minutes (number) }.\n\nsuggested_tasks is an array of objects: { task_name (string, a short, highly probable prep or follow-up action based on the meeting title), related_meeting (string) }. Only infer tasks for meetings that clearly require prep or follow-up (e.g., '1:1', 'Review', 'Planning'). Ignore generic blocks like 'Lunch' or 'Focus Time'. Do not include any text outside the JSON.";
 
     const result = await model.generateContent([
       prompt,
@@ -28,20 +28,32 @@ export async function analyzeCalendar(base64Image: string) {
     ]);
 
     const text = result.response.text();
-    // Clean potential markdown from output
-    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    // Clean potential markdown from output (e.g. ```json\n[{...}]\n```)
+    let cleanText = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
 
-    let events: { day: string; activity: string; duration_minutes: number }[];
+    // Extract only the JSON object
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+
+    let parseData: { 
+      timesheet: { day: string; activity: string; duration_minutes: number }[];
+      suggested_tasks: { task_name: string; related_meeting: string }[];
+    };
     try {
-      events = JSON.parse(cleanText);
-    } catch (parseError) {
+      parseData = JSON.parse(cleanText);
+    } catch (parseError: any) {
       console.error("Failed to parse JSON:", cleanText);
-      throw new Error("Failed to parse calendar data from AI.");
+      throw new Error(`Failed to parse AI response: ${parseError.message}`);
     }
 
-    if (!Array.isArray(events)) {
-      throw new Error("AI did not return an array.");
+    if (!parseData || !Array.isArray(parseData.timesheet)) {
+      throw new Error("AI did not return the expected timesheet array. Data missing.");
     }
+
+    const events = parseData.timesheet;
 
     // Mathematical processing
     let adminPoolMinutes = 2400; // 5 days * 480 minutes
@@ -79,7 +91,13 @@ export async function analyzeCalendar(base64Image: string) {
     // Sort by hours descending (Admin usually near top or bottom depending, we'll just sort natively)
     finalResults.sort((a, b) => b.hours - a.hours);
 
-    return { success: true, data: finalResults };
+    return { 
+      success: true, 
+      data: { 
+        timesheetData: finalResults, 
+        suggestedTasks: parseData.suggested_tasks || [] 
+      } 
+    };
   } catch (error: any) {
     console.error("analyzeCalendar Error:", error);
     return { success: false, error: error.message || "An unknown error occurred." };

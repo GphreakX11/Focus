@@ -4,9 +4,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   generateBuildId: async () => {
     // Generate a custom build ID on every deployment to force cache invalidation
     return `build-${Date.now()}`;

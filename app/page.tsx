@@ -106,8 +106,41 @@ export default function Home() {
   const [calendarImage, setCalendarImage] = useState<string | null>(null);
   const [isAnalyzingCalendar, setIsAnalyzingCalendar] = useState(false);
   const [calendarResults, setCalendarResults] = useState<{ activity: string; hours: number }[] | null>(null);
+  const [suggestedTasks, setSuggestedTasks] = useState<{ task_name: string, related_meeting: string }[]>([]);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState(false);
+
+  const handleAddSuggestedTask = (task: { task_name: string, related_meeting: string }, idx: number) => {
+    const textToSubmit = `[Prep for ${task.related_meeting}] ${task.task_name}`;
+    
+    setTodos(prev => {
+      const newTodo = { 
+        id: Date.now().toString(), 
+        text: textToSubmit, 
+        completed: false, 
+        important: true, 
+        backburner: false,
+        activeTab: true,
+        activeSince: getTodayStrWithLog()
+      };
+      
+      const firstCompletedIndex = prev.findIndex(t => t.completed);
+      let insertedList = [];
+      if (firstCompletedIndex === -1) {
+        insertedList = [...prev, newTodo];
+      } else {
+        insertedList = [
+          ...prev.slice(0, firstCompletedIndex),
+          newTodo,
+          ...prev.slice(firstCompletedIndex)
+        ];
+      }
+      return sortTodos(insertedList);
+    });
+
+    // Remove from suggestions list
+    setSuggestedTasks(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleAnalyze = async () => {
     if (!transcriptInput.trim() || isAnalyzing) return;
@@ -232,11 +265,18 @@ export default function Home() {
     setIsAnalyzingCalendar(true);
     setCalendarError(null);
     setCalendarResults(null);
+    setSuggestedTasks([]);
     
     try {
       const response = await analyzeCalendar(calendarImage);
       if (response.success && response.data) {
-        setCalendarResults(response.data);
+        // The new return format from actions.ts is an object with timesheetData and suggestedTasks
+        const payload = response.data as { 
+          timesheetData: { activity: string; hours: number }[];
+          suggestedTasks: { task_name: string; related_meeting: string }[];
+        };
+        setCalendarResults(payload.timesheetData);
+        setSuggestedTasks(payload.suggestedTasks || []);
       } else {
         throw new Error(response.error || "Failed to process calendar.");
       }
@@ -276,9 +316,37 @@ export default function Home() {
     
     const reader = new FileReader();
     reader.onload = (event) => {
-      setCalendarImage(event.target?.result as string);
-      setCalendarResults(null); 
-      setCalendarError(null);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1024;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          setCalendarImage(compressedBase64);
+          setCalendarResults(null); 
+          setCalendarError(null);
+        }
+      };
+      img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
@@ -1751,6 +1819,45 @@ export default function Home() {
                       Download CSV
                     </button>
                   </div>
+
+                  {/* Section B: Suggested Tasks */}
+                  {suggestedTasks && suggestedTasks.length > 0 && (
+                    <div className="flex flex-col gap-3 mt-2 mb-8 pt-6 border-t border-white/10">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-indigo-400" />
+                        <h3 className="text-white font-bold text-sm tracking-wide">Suggested Focus Items</h3>
+                      </div>
+                      <p className="text-xs text-white/50 mb-2 leading-relaxed">
+                        Based on your calendar meetings, I&apos;ve inferred these potential preparation or follow-up tasks. Add them straight to your active list.
+                      </p>
+                      
+                      <div className="flex flex-col gap-2">
+                        {suggestedTasks.map((task, idx) => (
+                          <div 
+                            key={idx}
+                            className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-start justify-between gap-3 group hover:bg-white/10 transition-all"
+                          >
+                            <div className="flex flex-col gap-1 min-w-0 flex-1">
+                              <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider font-mono truncate">
+                                FOR: {task.related_meeting}
+                              </span>
+                              <span className="text-sm font-semibold text-white/90 leading-tight">
+                                {task.task_name}
+                              </span>
+                            </div>
+                            
+                            <button
+                              onClick={() => handleAddSuggestedTask(task, idx)}
+                              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 mt-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[10px] uppercase tracking-wider transition-all active:scale-95 shadow-[0_0_15px_rgba(99,102,241,0.2)]"
+                            >
+                              <Check className="h-3 w-3 stroke-[3]" />
+                              Add
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
