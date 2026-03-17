@@ -32,12 +32,12 @@ timesheet is an array of objects: { day_of_week (string, e.g. 'Monday'), activit
 suggested_tasks is an array of objects: { task_name (string), related_meeting (string) }. 
 
 Rules for extraction:
-1. Extract ALL scheduled events. Provide the FULL, complete meeting title (e.g. "Wraithwatch Weekly Sync" instead of just "Wraithw").
-2. For each activity name, STRIP OUT platform noise like "Microsoft Teams Meeting", "Zoom Meeting", "Meeting Link", or "Microsoft Teams" ONLY. Do not strip actual project names or meeting topics.
-3. DO NOT use Markdown bolding (no **) or italics in any activity names or durations.
-4. The duration_minutes MUST be a number representing the meeting length. Do not put text in this field.
-5. For each meeting, ensure you provide the correct day_of_week based on the visual layout.
-6. CRITICAL: Return ONLY the raw JSON array. Do not include summary rows, section dividers, or column headers (like an activity named "Activity" or "Tuesday") inside the JSON objects.
+1. Extract ALL scheduled events. Provide the FULL, complete meeting title (e.g. "Wraithwatch Weekly Sync" instead of just "Wraithwatch").
+2. For EACH event, you MUST provide the correct day_of_week (e.g., 'Monday', 'Tuesday'). 
+3. For each activity name, STRIP OUT platform noise like "Microsoft Teams Meeting", "Zoom Meeting", "Meeting Link", or "Microsoft Teams" ONLY.
+4. DO NOT use Markdown bolding (no **) or italics in any activity names or durations.
+5. The duration_minutes MUST be a positive number.
+6. CRITICAL: Return ONLY the raw JSON array of events. Do not include headers, section titles, or summary rows inside the JSON.
 7. Return ONLY the JSON object.`;
 
     const result = await model.generateContent([
@@ -73,8 +73,8 @@ Rules for extraction:
     
     // 1. Process Daily Dataset
     // 1. Filter out metadata and junk rows
-    const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    const junkNames = ['activity', 'activities', 'day', 'hours', 'description'];
+    const dayNamesSet = new Set(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+    const junkNamesSet = new Set(['activity', 'activities', 'day', 'hours', 'description', 'time', 'duration', 'wraithwatch']); // specifically adding wraithwatch if it's junk, though user says it's an activity
     
     const events = (parseData.timesheet || []).filter((event: any) => {
       const activity = (event.activity || "").toLowerCase().trim();
@@ -83,42 +83,43 @@ Rules for extraction:
       // Filter out 0 duration
       if (mins <= 0) return false;
       
-      // Filter out day names used as activities
-      if (dayNames.includes(activity)) return false;
+      // Filter out day names used as activities (Gemini mistake)
+      if (dayNamesSet.has(activity)) return false;
       
       // Filter out common header names
-      if (junkNames.includes(activity)) return false;
+      if (junkNamesSet.has(activity)) return false;
       
       return true;
     });
 
     const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const groupedData: Record<string, { activity: string; minutes: number }[]> = {};
+    const noiseRegex = /(Microsoft Teams Meeting|Zoom Meeting|Meeting Link|Microsoft Teams|Teams Meeting)/gi;
 
     for (const event of events) {
       const day = event.day_of_week || 'Unknown';
       if (!groupedData[day]) groupedData[day] = [];
-      groupedData[day].push({ 
-        activity: event.activity, 
-        minutes: event.duration_minutes || 0 
-      });
+      const cleanActivity = event.activity
+        .replace(noiseRegex, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\*/g, '')
+        .trim();
+      
+      // Secondary filter for late-caught junk
+      if (!cleanActivity || junkNamesSet.has(cleanActivity.toLowerCase())) continue;
+      
+      groupedData[day].push({ activity: cleanActivity, minutes: Number(event.duration_minutes) || 0 });
     }
 
     // 2. Process Weekly Totals
     const weeklyTotals: Record<string, number> = {};
     let totalWeeklyMeetingMinutes = 0;
 
-    const noiseRegex = /(Microsoft Teams Meeting|Zoom Meeting|Meeting Link|Microsoft Teams|Teams Meeting)/gi;
-
-    for (const event of events) {
-      const activity = (event.activity || "Unknown Activity")
-        .replace(noiseRegex, '')
-        .replace(/\s+/g, ' ')
-        .replace(/\*/g, '')
-        .trim();
-      const mins = Number(event.duration_minutes) || 0;
-      weeklyTotals[activity] = (weeklyTotals[activity] || 0) + mins;
-      totalWeeklyMeetingMinutes += mins;
+    for (const day of Object.keys(groupedData)) {
+      for (const event of groupedData[day]) {
+        weeklyTotals[event.activity] = (weeklyTotals[event.activity] || 0) + event.minutes;
+        totalWeeklyMeetingMinutes += event.minutes;
+      }
     }
 
     // Generate Combined Markdown
@@ -128,8 +129,7 @@ Rules for extraction:
     for (const day of sortedDays) {
       let dailyMeetingMins = 0;
       for (const event of groupedData[day]) {
-        const cleanActivity = event.activity.replace(noiseRegex, '').replace(/\s+/g, ' ').trim();
-        markdown += `| ${day} | ${cleanActivity} | ${(event.minutes / 60).toFixed(2)} |\n`;
+        markdown += `| ${day} | ${event.activity} | ${(event.minutes / 60).toFixed(2)} |\n`;
         dailyMeetingMins += event.minutes;
       }
       const adminMins = Math.max(0, 480 - dailyMeetingMins);

@@ -137,6 +137,8 @@ export default function Home() {
   useEffect(() => {
     if (viewingTimesheet) {
       const lines = viewingTimesheet.markdown.split('\n');
+      let lastDay: string | undefined = undefined;
+      
       const rows = lines
         .filter(l => l.startsWith('|'))
         .filter(l => !l.includes('---')) // skip separator
@@ -151,26 +153,32 @@ export default function Home() {
           let activity = cells.length === 3 ? cells[1] : cells[0];
           let hours = cells.length === 3 ? cells[2] : cells[1];
 
+          // Filter out header junk locally as well
+          const lowerActivity = activity.toLowerCase();
+          if (lowerActivity === 'activity' || lowerActivity === 'activity description' || lowerActivity === 'day') return null;
+
           // SELF-CORRECTION: If hours contains non-numeric text (like "Wraithwatch"), it shifted.
-          // This happens when Gemini puts a note in the third column or name is split.
           const isNumeric = /^-?\d*\.?\d+$/.test(hours || "");
           if (!isNumeric && hours && hours !== "0.00" && hours !== "0") {
-            // It's likely the activity name continued here or shifted
             activity = `${activity} ${hours}`.trim();
-            hours = "0.00"; // Fallback
+            hours = "0.00";
           }
 
-          if (day === '-') day = undefined;
+          // DAY INHERITANCE: If day is missing or '-', use the last valid day
+          if (!day || day === '-') {
+            day = lastDay;
+          } else {
+            lastDay = day;
+          }
 
           return {
             id: `row-${idx}-${Date.now()}`,
-            day,
+            day: day || lastDay, // Final fallback
             activity,
             hours: hours || '0.00'
           };
         })
-        .filter(r => r !== null)
-        .filter(r => r.activity !== 'Activity' && r.activity !== 'Day' && r.activity !== 'Activity Description');
+        .filter(r => r !== null);
       
       setEditingRows(rows as any);
       setIsAiDrawerOpen(false);
