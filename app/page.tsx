@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download } from 'lucide-react';
-import { analyzeCalendar } from './actions';
 
 type Habit = {
   id: string;
@@ -272,7 +271,19 @@ export default function Home() {
     setSuggestedTasks([]);
     
     try {
-      const response = await analyzeCalendar(calendarImage);
+      const apiResponse = await fetch('/api/analyze-calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Image: calendarImage })
+      });
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server responded with ${apiResponse.status}`);
+      }
+
+      const response = await apiResponse.json();
+      
       if (response.success && response.data) {
         const payload = response.data as { 
           timesheetData: { activity: string; hours: number }[];
@@ -325,7 +336,7 @@ export default function Home() {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxDim = 1024;
+        const maxDim = 800;
 
         if (width > height) {
           if (width > maxDim) {
@@ -344,7 +355,7 @@ export default function Home() {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
           setCalendarImage(compressedBase64);
           setCalendarResults(null); 
           setCalendarError(null);
