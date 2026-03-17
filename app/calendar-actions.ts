@@ -3,8 +3,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /**
- * Calendar Analyzer using FormData and Gemini 1.5-Flash
- * Note: maxDuration removed to resolve build export issues in 'use server' file.
+ * Calendar Analyzer using FormData to bypass payload limits.
+ * Updated to use gemini-2.0-flash and strict inlineData formatting.
  */
 export async function analyzeCalendar(formData: FormData) {
   try {
@@ -19,13 +19,15 @@ export async function analyzeCalendar(formData: FormData) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Explicitly using gemini-2.0-flash as requested
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // Clean image data
+    // Clean image data: remove any data URL prefix
     const base64Data = base64Image.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, "");
 
     const prompt = "Analyze this weekly calendar screenshot. Return ONLY a valid JSON object with two keys: timesheet and suggested_tasks.\n\ntimesheet is an array of objects: { day (string), activity (string), duration_minutes (number) }.\n\nsuggested_tasks is an array of objects: { task_name (string, a short, highly probable prep or follow-up action based on the meeting title), related_meeting (string) }. Only infer tasks for meetings that clearly require prep or follow-up (e.g., '1:1', 'Review', 'Planning'). Ignore generic blocks like 'Lunch' or 'Focus Time'. Do not include any text outside the JSON.";
 
+    // Using strictly inlineData formatting as required by specs
     const result = await model.generateContent([
       prompt,
       {
@@ -49,7 +51,7 @@ export async function analyzeCalendar(formData: FormData) {
     try {
       parseData = JSON.parse(cleanText);
     } catch (parseError: any) {
-      throw new Error("Failed to parse AI response.");
+      throw new Error(`Failed to parse AI response: ${parseError.message}`);
     }
 
     if (!parseData || !Array.isArray(parseData.timesheet)) {
@@ -91,3 +93,6 @@ export async function analyzeCalendar(formData: FormData) {
     return { success: false, error: error.message || "Unknown error." };
   }
 }
+
+// Note: maxDuration removed to fix build error. Server actions imported in client 
+// components cannot reliably export non-function constants.
