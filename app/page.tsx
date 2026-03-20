@@ -233,20 +233,23 @@ export default function Home() {
           }
 
           return {
-            id: `row-${idx}-${Date.now()}`,
+            id: `row-${idx}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             day: day || lastDay,
             activity,
             hours: hours || '0.00',
             chargeCode: ''
           };
         })
-
-        .filter(r => r !== null);
+        .filter(r => r !== null) as TimecardRow[];
       
-      setEditingRows(rows as TimecardRow[]);
+      if (rows.length > 0) {
+        setEditingRows(prev => {
+          const next = [...prev, ...rows];
+          // Basic de-dupe to prevent accidental double-parsing of the same exact line
+          return next;
+        });
+      }
       setIsAiDrawerOpen(false);
-    } else {
-      setEditingRows([]);
     }
   }, [viewingTimesheet]);
 
@@ -2233,24 +2236,132 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* View Toggle */}
               <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
                 <button 
-                  onClick={() => setIsTimecardView(false)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${!isTimecardView ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                  onClick={() => setTimecardViewMode('raw')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timecardViewMode === 'raw' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
                 >
                   Raw View
                 </button>
                 <button 
-                  onClick={() => setIsTimecardView(true)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${isTimecardView ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                  onClick={() => setTimecardViewMode('daily')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timecardViewMode === 'daily' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
                 >
-                  Timecard View
+                  Daily
+                </button>
+                <button 
+                  onClick={() => setTimecardViewMode('weekly')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timecardViewMode === 'weekly' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                >
+                  Weekly
                 </button>
               </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-8 font-sans text-left bg-gradient-to-b from-transparent to-black/20">
+                {/* Manual Entry Button & Form */}
+                <div className="flex items-center justify-between mb-6">
+                  <button 
+                    onClick={() => setIsManualEntryOpen(!isManualEntryOpen)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl font-bold text-xs transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Manual Activity
+                  </button>
+
+                  {timecardViewMode === 'daily' && (
+                    <div className="flex gap-1.5 p-1 bg-black/20 rounded-xl border border-white/5">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                        const fullDay = day === 'Mon' ? 'Monday' : 
+                                      day === 'Tue' ? 'Tuesday' : 
+                                      day === 'Wed' ? 'Wednesday' : 
+                                      day === 'Thu' ? 'Thursday' : 
+                                      day === 'Fri' ? 'Friday' : 
+                                      day === 'Sat' ? 'Saturday' : 'Sunday';
+                        return (
+                          <button 
+                            key={day}
+                            onClick={() => setSelectedDayFilter(fullDay)}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedDayFilter === fullDay ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {isManualEntryOpen && (
+                  <div className="mb-8 p-6 bg-white/5 border border-white/10 rounded-[2rem] animate-in slide-in-from-top-4 duration-300 shadow-2xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-black text-white/40 tracking-widest px-1">Activity Name</label>
+                        <input 
+                          type="text"
+                          value={manualEntryForm.activity}
+                          onChange={(e) => setManualEntryForm({...manualEntryForm, activity: e.target.value})}
+                          className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-all outline-none"
+                          placeholder="Meeting, Review, etc..."
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-black text-white/40 tracking-widest px-1">Day</label>
+                        <select 
+                          value={manualEntryForm.day}
+                          onChange={(e) => setManualEntryForm({...manualEntryForm, day: e.target.value})}
+                          className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-all outline-none appearance-none"
+                        >
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                            <option key={d} value={d} className="bg-slate-900">{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-black text-white/40 tracking-widest px-1">Hours</label>
+                        <input 
+                          type="number"
+                          step="0.25"
+                          value={manualEntryForm.hours}
+                          onChange={(e) => setManualEntryForm({...manualEntryForm, hours: e.target.value})}
+                          className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-all outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-black text-white/40 tracking-widest px-1">Charge Code</label>
+                        <select 
+                          value={manualEntryForm.chargeCode}
+                          onChange={(e) => setManualEntryForm({...manualEntryForm, chargeCode: e.target.value})}
+                          className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-all outline-none appearance-none"
+                        >
+                          {savedChargeCodes.map(code => (
+                            <option key={code} value={code} className="bg-slate-900">{code}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <button 
+                        onClick={() => {
+                          const newRow: TimecardRow = {
+                            id: Math.random().toString(36).substr(2, 9),
+                            day: manualEntryForm.day,
+                            activity: manualEntryForm.activity,
+                            hours: manualEntryForm.hours,
+                            chargeCode: manualEntryForm.chargeCode
+                          };
+                          setEditingRows([...editingRows, newRow]);
+                          setManualEntryForm({ activity: '', day: manualEntryForm.day, hours: '1.0', chargeCode: DEFAULT_CHARGE_CODES[0] });
+                          setIsManualEntryOpen(false);
+                        }}
+                        disabled={!manualEntryForm.activity}
+                        className="px-8 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 uppercase tracking-wider"
+                      >
+                        Submit Activity
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="overflow-x-auto rounded-3xl border border-white/10 mb-8 shadow-inner">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-white/5 text-[10px] uppercase text-white/30 tracking-widest">
@@ -2263,131 +2374,153 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {isTimecardView ? (
-                        /* Timecard View Rendering */
-                        (() => {
-                          const days = Array.from(new Set(editingRows.filter(r => r.day).map(r => r.day)));
-                          return days.map(day => {
-                            const dayRows = editingRows.filter(r => r.day === day);
-                            const groupedByCode: Record<string, number> = {};
-                            dayRows.forEach(r => {
-                              const code = r.chargeCode || 'Unassigned';
-                              const h = parseFloat(r.hours) || 0;
-                              groupedByCode[code] = (groupedByCode[code] || 0) + h;
-                            });
-                            
-                            const totalCharged = Object.values(groupedByCode).reduce((a, b) => a + b, 0);
-                            const adminHours = Math.max(0, 8 - totalCharged);
-                            
-                            return (
-                              <React.Fragment key={day}>
-                                <tr className="bg-white/[0.02]">
-                                  <td colSpan={5} className="px-6 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400/60 border-b border-white/5">{day}</td>
-                                </tr>
-                                {Object.entries(groupedByCode).map(([code, hours]) => (
-                                  <tr key={code} className="hover:bg-white/5 transition-all">
-                                    <td className="px-6 py-3 text-white/20 font-bold">-</td>
-                                    <td className="px-6 py-4 text-white/60 text-xs italic">Grouped Activities</td>
-                                    <td className="px-6 py-3 font-bold text-white">{code}</td>
-                                    <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold">{hours.toFixed(2)}</td>
-                                    <td className="px-2 py-3"></td>
-                                  </tr>
-                                ))}
-                                {adminHours > 0 && (
-                                  <tr className="bg-indigo-500/5 transition-all">
-                                    <td className="px-6 py-3 text-white/20 font-bold">-</td>
-                                    <td className="px-6 py-4 text-indigo-300/80 text-xs font-bold">Daily Admin (Auto-Calculated)</td>
-                                    <td className="px-6 py-3 font-bold text-indigo-300">ADMIN</td>
-                                    <td className="px-6 py-3 text-right text-indigo-300 font-mono font-bold">{adminHours.toFixed(2)}</td>
-                                    <td className="px-2 py-3"></td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
+                      {(() => {
+                        if (timecardViewMode === 'daily') {
+                          // Filtering by selected day and aggregating by charge code
+                          const dayRows = editingRows.filter(r => r.day === selectedDayFilter);
+                          const groupedByCode: Record<string, number> = {};
+                          dayRows.forEach(r => {
+                            const code = r.chargeCode || 'Unassigned';
+                            const h = parseFloat(r.hours) || 0;
+                            groupedByCode[code] = (groupedByCode[code] || 0) + h;
                           });
-                        })()
-                      ) : (
-                        editingRows.map((row, i) => (
-                          <tr key={row.id} className="group hover:bg-white/5 transition-all">
-                            <td className="px-6 py-3">
-                              <input 
-                                type="text"
-                                value={row.day || '-'}
-                                onChange={(e) => {
-                                  const next = [...editingRows];
-                                  next[i].day = e.target.value;
-                                  setEditingRows(next);
-                                }}
-                                className="bg-transparent border-none outline-none text-white/40 font-bold focus:text-indigo-400 w-full transition-colors"
-                              />
-                            </td>
-                            <td className="px-6 py-4">
-                              <textarea 
-                                value={row.activity}
-                                rows={1}
-                                onChange={(e) => {
-                                  const next = [...editingRows];
-                                  next[i].activity = e.target.value;
-                                  setEditingRows(next);
-                                  e.target.style.height = 'auto';
-                                  e.target.style.height = e.target.scrollHeight + 'px';
-                                }}
-                                className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all resize-none min-h-[1.5rem] leading-relaxed block overflow-hidden"
-                                onFocus={(e) => {
-                                  e.target.style.height = 'auto';
-                                  e.target.style.height = e.target.scrollHeight + 'px';
-                                }}
-                              />
-                            </td>
-                            <td className="px-6 py-3">
-                              <input 
-                                type="text"
-                                list="charge-codes"
-                                value={row.chargeCode || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const next = [...editingRows];
-                                  next[i].chargeCode = val;
-                                  setEditingRows(next);
-                                  
-                                  if (val && !savedChargeCodes.includes(val)) {
-                                    const updatedCodes = [...savedChargeCodes, val];
-                                    setSavedChargeCodes(updatedCodes);
-                                    localStorage.setItem('focus-charge-codes', JSON.stringify(updatedCodes));
-                                  }
-                                }}
-                                placeholder="Code..."
-                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500/50 w-full transition-all"
-                              />
-                              <datalist id="charge-codes">
-                                {savedChargeCodes.map(code => <option key={code} value={code} />)}
-                              </datalist>
-                            </td>
-                            <td className="px-6 py-3 text-right">
-                              <input 
-                                type="text"
-                                value={row.hours}
-                                onChange={(e) => {
-                                  const next = [...editingRows];
-                                  next[i].hours = e.target.value;
-                                  setEditingRows(next);
-                                }}
-                                className="bg-transparent border-none outline-none text-indigo-400 font-mono font-bold text-right w-16 focus:text-white transition-colors"
-                              />
-                            </td>
-                            <td className="px-2 py-3">
-                              <button 
-                                onClick={() => {
-                                  setEditingRows(prev => prev.filter((_, idx) => idx !== i));
-                                }}
-                                className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 transition-all"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
+                          
+                          const totalCharged = Object.values(groupedByCode).reduce((a, b) => a + b, 0);
+                          const adminHours = Math.max(0, 8 - totalCharged);
+                          
+                          return (
+                            <>
+                              {Object.entries(groupedByCode).map(([code, hours]) => (
+                                <tr key={code} className="hover:bg-white/5 transition-all">
+                                  <td className="px-6 py-3 text-white/20 font-bold">{selectedDayFilter}</td>
+                                  <td className="px-6 py-4 text-white/60 text-xs italic">Grouped Activities</td>
+                                  <td className="px-6 py-3 font-bold text-white tracking-widest uppercase text-[10px]">{code}</td>
+                                  <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold tracking-tight">{hours.toFixed(2)}</td>
+                                  <td className="px-2 py-3"></td>
+                                </tr>
+                              ))}
+                              {adminHours > 0 && (
+                                <tr className="bg-indigo-500/5 transition-all">
+                                  <td className="px-6 py-3 text-white/20 font-bold">{selectedDayFilter}</td>
+                                  <td className="px-6 py-4 text-indigo-300/80 text-xs font-bold leading-relaxed">Daily Admin (Auto-Calculated)</td>
+                                  <td className="px-6 py-3 font-bold text-indigo-300 tracking-widest uppercase text-[10px]">ADMIN</td>
+                                  <td className="px-6 py-3 text-right text-indigo-300 font-mono font-bold tracking-tight">{adminHours.toFixed(2)}</td>
+                                  <td className="px-2 py-3"></td>
+                                </tr>
+                              )}
+                              {dayRows.length === 0 && (
+                                <tr>
+                                  <td colSpan={5} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
+                                </tr>
+                              )}
+                            </>
+                          );
+                        } else if (timecardViewMode === 'weekly') {
+                          const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                          const sortedRows = [...editingRows].sort((a, b) => dayOrder.indexOf(a.day || '') - dayOrder.indexOf(b.day || ''));
+                          
+                          return sortedRows.map((row) => (
+                            <tr key={row.id} className="group hover:bg-white/5 transition-all animate-in fade-in duration-300">
+                              <td className="px-6 py-3 text-white/40 font-bold text-[10px] uppercase tracking-wider">{row.day || '-'}</td>
+                              <td className="px-6 py-4 text-white/90 font-medium text-xs leading-relaxed">{row.activity}</td>
+                              <td className="px-6 py-3 text-white/30 font-bold tracking-widest uppercase text-[10px]">{row.chargeCode || '-'}</td>
+                              <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold tracking-tight">{parseFloat(row.hours || '0').toFixed(2)}</td>
+                              <td className="px-2 py-3">
+                                <button 
+                                  onClick={() => {
+                                    setEditingRows(prev => prev.filter(r => r.id !== row.id));
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ));
+                        } else {
+                          // RAW VIEW (Editable)
+                          return editingRows.map((row, i) => (
+                            <tr key={row.id} className="group hover:bg-white/5 transition-all">
+                              <td className="px-6 py-3">
+                                <input 
+                                  type="text"
+                                  value={row.day || '-'}
+                                  onChange={(e) => {
+                                    const next = [...editingRows];
+                                    next[i].day = e.target.value;
+                                    setEditingRows(next);
+                                  }}
+                                  className="bg-transparent border-none outline-none text-white/40 font-bold focus:text-indigo-400 w-full transition-colors text-[10px] uppercase tracking-wider"
+                                />
+                              </td>
+                              <td className="px-6 py-4">
+                                <textarea 
+                                  value={row.activity}
+                                  rows={1}
+                                  onChange={(e) => {
+                                    const next = [...editingRows];
+                                    next[i].activity = e.target.value;
+                                    setEditingRows(next);
+                                    e.target.style.height = 'auto';
+                                    e.target.style.height = e.target.scrollHeight + 'px';
+                                  }}
+                                  className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all resize-none min-h-[1.5rem] leading-relaxed block overflow-hidden text-xs"
+                                  onFocus={(e) => {
+                                    e.target.style.height = 'auto';
+                                    e.target.style.height = e.target.scrollHeight + 'px';
+                                  }}
+                                />
+                              </td>
+                              <td className="px-6 py-3">
+                                <input 
+                                  type="text"
+                                  list="charge-codes"
+                                  value={row.chargeCode || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const next = [...editingRows];
+                                    next[i].chargeCode = val;
+                                    setEditingRows(next);
+                                    
+                                    if (val && !savedChargeCodes.includes(val)) {
+                                      const updatedCodes = [...savedChargeCodes, val];
+                                      setSavedChargeCodes(updatedCodes);
+                                      localStorage.setItem('focus-charge-codes', JSON.stringify(updatedCodes));
+                                    }
+                                  }}
+                                  placeholder="Code..."
+                                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-white outline-none focus:border-indigo-500/50 w-full transition-all uppercase tracking-widest font-bold"
+                                />
+                                <datalist id="charge-codes">
+                                  {savedChargeCodes.map(code => <option key={code} value={code} />)}
+                                </datalist>
+                              </td>
+                              <td className="px-6 py-3 text-right">
+                                <input 
+                                  type="text"
+                                  value={row.hours}
+                                  onChange={(e) => {
+                                    const next = [...editingRows];
+                                    next[i].hours = e.target.value;
+                                    setEditingRows(next);
+                                  }}
+                                  className="bg-transparent border-none outline-none text-indigo-400 font-mono font-bold text-right w-16 focus:text-white transition-colors tracking-tight"
+                                />
+                              </td>
+                              <td className="px-2 py-3">
+                                <button 
+                                  onClick={() => {
+                                    setEditingRows(prev => prev.filter(r => r.id !== row.id));
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ));
+                        }
+                      })()}
                     </tbody>
                   </table>
                 </div>
