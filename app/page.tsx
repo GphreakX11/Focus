@@ -1,7 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus, ArrowLeft, Target, Play, Pause } from 'lucide-react';
+
+// Dynamic Recharts Imports for SSR safety
+const ComposedChart = dynamic(() => import('recharts').then(mod => mod.ComposedChart), { ssr: false });
+const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false });
+const Area = dynamic(() => import('recharts').then(mod => mod.Area), { ssr: false });
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false });
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false });
+const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false });
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
 
 import { analyzeCalendar } from './calendar-actions';
 
@@ -1687,33 +1698,66 @@ export default function Home() {
       {!isFocusModeActive && (
         <div className="sticky top-0 z-[60] w-full flex flex-col items-center gap-4 bg-transparent pb-4 px-4" style={{ paddingTop: 'var(--safe-top)' }}>
           <div className="w-full max-w-xl p-4 sm:p-6 flex flex-col items-center justify-center relative group animate-in fade-in slide-in-from-top-4 duration-700">
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-lg w-full">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500/20 rounded-xl">
-                  <Sparkles className="h-5 w-5 text-amber-400" />
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col gap-4 shadow-lg w-full">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/20 rounded-xl">
+                    <Sparkles className="h-5 w-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
+                    <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
-                  <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
+                  <div className="flex items-center gap-2 justify-end">
+                    <div className="text-sm font-bold text-emerald-400">
+                      Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
-                <div className="flex items-center gap-2 justify-end">
-                  <div className="text-sm font-bold text-emerald-400">
-                    Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
-                  </div>
-                  {(() => {
-                    const yesterday = new Date();
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    const yesterdayStr = yesterday.toLocaleDateString('en-CA');
-                    const yesterdayScore = dailyPointsHistory[yesterdayStr] || 0;
-                    const diff = productivityPoints - yesterdayScore;
-                    if (diff > 0) return <span className="text-[10px] font-bold text-emerald-400 px-1.5 py-0.5 bg-emerald-400/10 rounded-md">+{diff} vs Yesterday</span>;
-                    if (diff < 0) return <span className="text-[10px] font-bold text-red-400 px-1.5 py-0.5 bg-red-400/10 rounded-md">{diff} vs Yesterday</span>;
-                    return <span className="text-[10px] font-bold text-white/20 px-1.5 py-0.5 bg-white/5 rounded-md">Steady</span>;
-                  })()}
-                </div>
+
+              {/* Productivity Chart */}
+              <div className="w-full h-[250px] mt-2 bg-black/20 rounded-xl p-2 border border-white/5">
+                <ResponsiveContainer width="100%" height={250}>
+                  <ComposedChart
+                    data={Object.entries(dailyPointsHistory)
+                      .sort((a, b) => a[0].localeCompare(b[0]))
+                      .slice(-7)
+                      .map(([date, points]) => ({
+                        date: date.split('-').slice(1).join('/'),
+                        points
+                      }))}
+                    margin={{ top: 10, right: 10, bottom: 0, left: -20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
+                    />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                      itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
+                    />
+                    <Area type="monotone" dataKey="points" fill="url(#colorPoints)" stroke="none" />
+                    <Bar dataKey="points" barSize={12} fill="#818cf8" radius={[4, 4, 0, 0]} />
+                    <defs>
+                      <linearGradient id="colorPoints" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
@@ -2376,38 +2420,60 @@ export default function Home() {
                     <tbody className="divide-y divide-white/5">
                       {(() => {
                         if (timecardViewMode === 'daily') {
-                          // Filtering by selected day and aggregating by charge code
+                          // AGGREGATE BY ACTIVITY NAME
                           const dayRows = editingRows.filter(r => r.day === selectedDayFilter);
-                          const groupedByCode: Record<string, number> = {};
+                          const activityGroups: Record<string, { totalHours: number, chargeCode: string, originalIds: string[] }> = {};
+                          
                           dayRows.forEach(r => {
-                            const code = r.chargeCode || 'Unassigned';
+                            const name = r.activity.trim();
                             const h = parseFloat(r.hours) || 0;
-                            groupedByCode[code] = (groupedByCode[code] || 0) + h;
+                            if (!activityGroups[name]) {
+                              activityGroups[name] = { totalHours: 0, chargeCode: r.chargeCode || '', originalIds: [] };
+                            }
+                            activityGroups[name].totalHours += h;
+                            activityGroups[name].originalIds.push(r.id);
+                            // Keep the first charge code found or the one that is set
+                            if (!activityGroups[name].chargeCode && r.chargeCode) {
+                              activityGroups[name].chargeCode = r.chargeCode;
+                            }
                           });
-                          
-                          const totalCharged = Object.values(groupedByCode).reduce((a, b) => a + b, 0);
-                          const adminHours = Math.max(0, 8 - totalCharged);
-                          
+
                           return (
                             <>
-                              {Object.entries(groupedByCode).map(([code, hours]) => (
-                                <tr key={code} className="hover:bg-white/5 transition-all">
+                              {Object.entries(activityGroups).map(([name, data]) => (
+                                <tr key={name} className="hover:bg-white/5 transition-all">
                                   <td className="px-6 py-3 text-white/20 font-bold">{selectedDayFilter}</td>
-                                  <td className="px-6 py-4 text-white/60 text-xs italic">Grouped Activities</td>
-                                  <td className="px-6 py-3 font-bold text-white tracking-widest uppercase text-[10px]">{code}</td>
-                                  <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold tracking-tight">{hours.toFixed(2)}</td>
-                                  <td className="px-2 py-3"></td>
+                                  <td className="px-6 py-4 text-white/90 font-medium text-xs leading-relaxed">{name}</td>
+                                  <td className="px-6 py-3">
+                                    <select 
+                                      value={data.chargeCode}
+                                      onChange={(e) => {
+                                        const newCode = e.target.value;
+                                        setEditingRows(prev => prev.map(r => 
+                                          data.originalIds.includes(r.id) ? { ...r, chargeCode: newCode } : r
+                                        ));
+                                      }}
+                                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-white outline-none focus:border-indigo-500/50 w-full transition-all uppercase tracking-widest font-bold appearance-none"
+                                    >
+                                      <option value="" className="bg-slate-900">Select Code...</option>
+                                      {savedChargeCodes.map(code => (
+                                        <option key={code} value={code} className="bg-slate-900">{code}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold tracking-tight">{data.totalHours.toFixed(2)}</td>
+                                  <td className="px-2 py-3 text-right">
+                                    <button 
+                                      onClick={() => {
+                                        setEditingRows(prev => prev.filter(r => !data.originalIds.includes(r.id)));
+                                      }}
+                                      className="p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </td>
                                 </tr>
                               ))}
-                              {adminHours > 0 && (
-                                <tr className="bg-indigo-500/5 transition-all">
-                                  <td className="px-6 py-3 text-white/20 font-bold">{selectedDayFilter}</td>
-                                  <td className="px-6 py-4 text-indigo-300/80 text-xs font-bold leading-relaxed">Daily Admin (Auto-Calculated)</td>
-                                  <td className="px-6 py-3 font-bold text-indigo-300 tracking-widest uppercase text-[10px]">ADMIN</td>
-                                  <td className="px-6 py-3 text-right text-indigo-300 font-mono font-bold tracking-tight">{adminHours.toFixed(2)}</td>
-                                  <td className="px-2 py-3"></td>
-                                </tr>
-                              )}
                               {dayRows.length === 0 && (
                                 <tr>
                                   <td colSpan={5} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
@@ -2438,7 +2504,7 @@ export default function Home() {
                             </tr>
                           ));
                         } else {
-                          // RAW VIEW (Editable)
+                          // RAW VIEW (Editable, NO Dropdowns as requested)
                           return editingRows.map((row, i) => (
                             <tr key={row.id} className="group hover:bg-white/5 transition-all">
                               <td className="px-6 py-3">
@@ -2471,29 +2537,8 @@ export default function Home() {
                                   }}
                                 />
                               </td>
-                              <td className="px-6 py-3">
-                                <input 
-                                  type="text"
-                                  list="charge-codes"
-                                  value={row.chargeCode || ''}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    const next = [...editingRows];
-                                    next[i].chargeCode = val;
-                                    setEditingRows(next);
-                                    
-                                    if (val && !savedChargeCodes.includes(val)) {
-                                      const updatedCodes = [...savedChargeCodes, val];
-                                      setSavedChargeCodes(updatedCodes);
-                                      localStorage.setItem('focus-charge-codes', JSON.stringify(updatedCodes));
-                                    }
-                                  }}
-                                  placeholder="Code..."
-                                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-white outline-none focus:border-indigo-500/50 w-full transition-all uppercase tracking-widest font-bold"
-                                />
-                                <datalist id="charge-codes">
-                                  {savedChargeCodes.map(code => <option key={code} value={code} />)}
-                                </datalist>
+                              <td className="px-6 py-3 text-white/30 font-bold tracking-widest uppercase text-[10px]">
+                                {row.chargeCode || '-'}
                               </td>
                               <td className="px-6 py-3 text-right">
                                 <input 
@@ -2524,6 +2569,70 @@ export default function Home() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Final Unanet Export Summary (Daily View Only) */}
+                {timecardViewMode === 'daily' && (
+                  <div className="mt-8 pt-8 border-t border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-2 bg-indigo-500/20 rounded-xl">
+                        <FileText className="h-5 w-5 text-indigo-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-white tracking-tight">Final Unanet Export Summary</h3>
+                    </div>
+
+                    <div className="bg-black/40 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
+                      <table className="w-full text-sm text-left">
+                        <thead className="bg-white/5 text-[10px] uppercase text-white/30 tracking-widest font-black">
+                          <tr>
+                            <th className="px-8 py-4">Charge Code</th>
+                            <th className="px-8 py-4 text-right">Total Hours Worked</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {(() => {
+                            const dayRows = editingRows.filter(r => r.day === selectedDayFilter);
+                            const summaryByCode: Record<string, number> = {};
+                            dayRows.forEach(r => {
+                              const code = r.chargeCode || 'UNASSIGNED';
+                              const h = parseFloat(r.hours) || 0;
+                              summaryByCode[code] = (summaryByCode[code] || 0) + h;
+                            });
+
+                            const codeEntries = Object.entries(summaryByCode);
+                            const totalCharged = codeEntries.reduce((a, b) => a + b[1], 0);
+                            const adminHours = Math.max(0, 8 - totalCharged);
+
+                            const rows = codeEntries.map(([code, hours]) => (
+                              <tr key={code} className="hover:bg-white/5 transition-all">
+                                <td className="px-8 py-4 font-bold text-white tracking-widest uppercase text-xs">{code}</td>
+                                <td className="px-8 py-4 text-right text-indigo-400 font-mono font-black text-lg">{hours.toFixed(2)}</td>
+                              </tr>
+                            ));
+
+                            return (
+                              <>
+                                {rows}
+                                <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
+                                  <td className="px-8 py-4">
+                                    <div className="flex flex-col">
+                                      <span className="font-black text-indigo-300 tracking-widest uppercase text-xs">8100|IN-HOUSE TRAINING-09718100 (ADMIN)</span>
+                                      <span className="text-[10px] text-indigo-300/40 font-bold italic">Auto-calculated to reach 8.0h</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-8 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
+                                </tr>
+                                <tr className="bg-white/5">
+                                  <td className="px-8 py-3 text-[10px] font-black uppercase text-white/20 tracking-[0.2em]">Daily Total</td>
+                                  <td className="px-8 py-3 text-right text-white/90 font-mono font-black text-lg italic">8.00</td>
+                                </tr>
+                              </>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 {/* Suggested Tasks SECTION in Modal */}
                 {viewingTimesheet?.suggestedTasks && viewingTimesheet.suggestedTasks.length > 0 && (
