@@ -1725,45 +1725,47 @@ export default function Home() {
               </div>
 
               {/* Productivity Chart */}
-              <div className="w-full h-[250px] mt-2 bg-black/20 rounded-xl p-2 border border-white/5" style={{ minHeight: '250px' }}>
-                <ResponsiveContainer width="100%" height="100%" minHeight={250}>
-                  <ComposedChart
-                    data={Object.entries(dailyPointsHistory)
-                      .sort((a, b) => a[0].localeCompare(b[0]))
-                      .slice(-7)
-                      .map(([date, points]) => ({
-                        date: date.split('-').slice(1).join('/'),
-                        points
-                      }))}
-                    margin={{ top: 10, right: 10, bottom: 0, left: -20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                    <XAxis 
-                      dataKey="date" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
-                    />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                      itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
-                    />
-                    <Area type="monotone" dataKey="points" fill="url(#colorPoints)" stroke="none" />
-                    <Bar dataKey="points" barSize={12} fill="#818cf8" radius={[4, 4, 0, 0]} />
-                    <Line type="monotone" dataKey="points" stroke="#fcd34d" strokeWidth={3} dot={{ r: 4, fill: '#fcd34d' }} />
-                    <defs>
-                      <linearGradient id="colorPoints" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                  </ComposedChart>
-                </ResponsiveContainer>
+              <div className="w-full h-[250px] mt-2 bg-black/20 rounded-xl p-2 border border-white/5" style={{ minHeight: '300px' }}>
+                <div style={{ width: '100%', height: '300px', minHeight: '300px' }}>
+                  <ResponsiveContainer width="100%" height="100%" minHeight={250}>
+                    <ComposedChart
+                      data={Object.entries(dailyPointsHistory)
+                        .sort((a, b) => a[0].localeCompare(b[0]))
+                        .slice(-7)
+                        .map(([date, points]) => ({
+                          date: date.split('-').slice(1).join('/'),
+                          points
+                        }))}
+                      margin={{ top: 10, right: 10, bottom: 0, left: -20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
+                      />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                        itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
+                      />
+                      <Area type="monotone" dataKey="points" fill="url(#colorPoints)" stroke="none" />
+                      <Bar dataKey="points" barSize={12} fill="#818cf8" radius={[4, 4, 0, 0]} />
+                      <Line type="monotone" dataKey="points" stroke="#fcd34d" strokeWidth={3} dot={{ r: 4, fill: '#fcd34d' }} />
+                      <defs>
+                        <linearGradient id="colorPoints" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </div>
