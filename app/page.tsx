@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus, ArrowLeft } from 'lucide-react';
+import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus, ArrowLeft } from 'lucide-react';
 
 import { analyzeCalendar } from './calendar-actions';
 
@@ -1691,7 +1691,6 @@ export default function Home() {
                   Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
                 </div>
                 {(() => {
-                  const todayStr = getTodayStr();
                   const yesterday = new Date();
                   yesterday.setDate(yesterday.getDate() - 1);
                   const yesterdayStr = yesterday.toLocaleDateString('en-CA');
@@ -1951,15 +1950,14 @@ export default function Home() {
                   id="calendar-upload" 
                   className="hidden" 
                   accept="image/*"
-                  capture="environment"
                   onChange={handleCalendarImageUpload}
                 />
                 <label 
                   htmlFor="calendar-upload"
                   className="w-full flex items-center justify-center gap-2 py-4 border border-white/10 bg-white/5 rounded-2xl text-white hover:border-indigo-500/50 hover:bg-white/10 transition-all cursor-pointer font-bold shadow-md hover:shadow-lg active:scale-[0.98]"
                 >
-                  <Camera className="h-5 w-5 text-indigo-400" />
-                  Upload / Take Picture
+                  <Upload className="h-5 w-5 text-indigo-400" />
+                  Upload Screenshot / Photo
                 </label>
               </div>
 
@@ -2466,40 +2464,3 @@ export default function Home() {
   );
 }
 
-// Simple internal markdown renderer if needed or just use standard tags
-// Since we don't have react-markdown installed and are restricted from complex installs,
-// let's do a simple manual parse of our specific table format.
-function ReactMarkdown({ children }: { children: string }) {
-  const lines = children.split('\n');
-  const tableLines = lines.filter(l => l.startsWith('|'));
-  
-  if (tableLines.length === 0) return <div className="whitespace-pre-wrap">{children}</div>;
-
-  const headers = tableLines[0].split('|').filter(s => s.trim()).map(s => s.trim());
-  const rows = tableLines.slice(2).map(l => l.split('|').filter(s => s.trim()).map(s => s.trim()));
-
-  return (
-    <div className="overflow-x-auto rounded-xl border border-white/10">
-      <table className="w-full text-sm text-left">
-        <thead className="bg-white/5 text-xs uppercase text-white/40">
-          <tr>
-            {headers.map((h, i) => (
-              <th key={i} className="px-4 py-3 font-semibold">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
-          {rows.map((row, i) => (
-            <tr key={i} className="hover:bg-white/5 transition-colors">
-              {row.map((cell, j) => (
-                <td key={j} className={`px-4 py-2 ${j === 2 ? 'font-mono text-indigo-400' : 'text-white/80'}`}>
-                  {cell.startsWith('**') ? <strong>{cell.replace(/\*\*/g, '')}</strong> : cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
