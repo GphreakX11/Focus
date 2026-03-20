@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Copy, Plus, ArrowLeft, Target, Play, Pause } from 'lucide-react';
+import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Copy, Plus, ArrowLeft, Target, Play, Pause, ChevronUp, ChevronDown, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 // Dynamic Recharts Imports for SSR safety
 const ComposedChart = dynamic(() => import('recharts').then(mod => mod.ComposedChart), { ssr: false });
@@ -1368,40 +1368,27 @@ export default function Home() {
               >···</button>
             </div>
           </div>
-          {/* COMPACT Action Drawer: Horizontal Icon Bar */}
+          {/* UNIFIED Action Drawer: Horizontal Icon Bar */}
           {selectedTodoId === todo.id && (
             <div 
               className="w-full mt-3 p-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-between animate-slide-down shadow-xl relative"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Focus Target Action / Reactivate Arrow */}
-              {todoView === 'backburner' ? (
-                <button 
-                  onClick={() => {
-                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
-                    setSelectedTodoId(null);
-                  }}
-                  className="p-2.5 rounded-full transition-all active:scale-90 text-orange-400 hover:bg-white/10"
-                  title="Reactivate Task"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-              ) : (
-                <button 
-                  onClick={() => {
-                    setActiveTaskId(todo.id);
-                    setFocusedTaskId(todo.id);
-                    setIsFocusModeActive(true);
-                    setSelectedTodoId(null);
-                  }}
-                  className={`p-2.5 rounded-full transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-lg' : 'text-indigo-400 hover:bg-white/10'}`}
-                  title="Enter Focus Mode"
-                >
-                  <Target className="h-5 w-5 stroke-[2.5]" />
-                </button>
-              )}
+              {/* 1. Focus Target Action */}
+              <button 
+                onClick={() => {
+                  setActiveTaskId(todo.id);
+                  setFocusedTaskId(todo.id);
+                  setIsFocusModeActive(true);
+                  setSelectedTodoId(null);
+                }}
+                className={`p-2.5 rounded-full transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-lg' : 'text-indigo-400 hover:bg-white/10'}`}
+                title="Enter Focus Mode"
+              >
+                <Target className="h-5 w-5 stroke-[2.5]" />
+              </button>
               
-              {/* Star Action */}
+              {/* 2. Star Action */}
               <button 
                 onClick={() => handleToggleStar(todo.id)} 
                 className={`p-2.5 rounded-full transition-all active:scale-90 ${todo.important ? 'text-amber-400 bg-amber-400/20' : 'text-white/40 hover:text-amber-400 hover:bg-white/10'}`}
@@ -1412,7 +1399,7 @@ export default function Home() {
                 </svg>
               </button>
 
-              {/* Difficulty Cycle Action */}
+              {/* 3. Difficulty Cycle Action */}
               <button 
                 onClick={(e) => handleCycleDifficulty(todo.id, e)} 
                 className={`p-2.5 rounded-full transition-all active:scale-90 font-black text-lg w-10 h-10 flex items-center justify-center ${
@@ -1425,7 +1412,7 @@ export default function Home() {
                 {todo.difficulty === 'hard' ? 'H' : todo.difficulty === 'easy' ? 'E' : 'M'}
               </button>
 
-              {/* Backburner Toggle */}
+              {/* 4. Backburner Toggle */}
               <button 
                 onClick={() => { 
                   setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: !t.backburner } : t)); 
@@ -1437,7 +1424,7 @@ export default function Home() {
                 <span className="text-xl leading-none">🔥</span>
               </button>
 
-              {/* Rename Action */}
+              {/* 5. Rename Action */}
               <button 
                 onClick={() => { 
                   setEditingTodoId(todo.id); 
@@ -1453,60 +1440,49 @@ export default function Home() {
                 </svg>
               </button>
 
-              {/* Move Up/Down (Hide for Backburner) */}
-              {todoView !== 'backburner' && !todo.completed && (
-                <>
-                  <button
-                    onClick={() => moveTodo(todo.id, 'up')}
-                    className="p-2.5 rounded-full transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
-                    title="Move Up"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => moveTodo(todo.id, 'down')}
-                    className="p-2.5 rounded-full transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
-                    title="Move Down"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
+              {/* 6+7. Move Up/Down (Reorder) */}
+              <div className="flex items-center">
+                <button
+                  onClick={() => moveTodo(todo.id, 'up')}
+                  className={`p-2.5 rounded-full transition-all active:scale-90 ${todo.completed ? 'opacity-20 pointer-events-none' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
+                  title="Move Up"
+                >
+                  <ChevronUp className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => moveTodo(todo.id, 'down')}
+                  className={`p-2.5 rounded-full transition-all active:scale-90 ${todo.completed ? 'opacity-20 pointer-events-none' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
+                  title="Move Down"
+                >
+                  <ChevronDown className="h-5 w-5" />
+                </button>
+              </div>
 
-                  {/* Move Between Today/Active */}
-                  {todoView === 'today' ? (
-                    <button 
-                      onClick={() => {
-                        setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: true, activeSince: new Date().toLocaleDateString('en-CA') } : t));
-                        setSelectedTodoId(null);
-                      }}
-                      className="p-2.5 rounded-full transition-all active:scale-90 text-indigo-400 hover:bg-white/10"
-                      title="Move to Active"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => {
-                        setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: false } : t));
-                        setSelectedTodoId(null);
-                      }}
-                      className="p-2.5 rounded-full transition-all active:scale-90 text-indigo-400 hover:bg-white/10"
-                      title="Move to Today"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                  )}
-                </>
-              )}
+              {/* 8. Move Tab Action (Dynamic Arrow) */}
+              <button 
+                onClick={() => {
+                  if (todoView === 'backburner') {
+                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
+                  } else if (todoView === 'today') {
+                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: true, activeSince: getTodayStr() } : t));
+                  } else {
+                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: false } : t));
+                  }
+                  setSelectedTodoId(null);
+                }}
+                className="p-2.5 rounded-full transition-all active:scale-90 text-indigo-400 hover:bg-white/10"
+                title={todoView === 'backburner' ? 'Reactivate' : todoView === 'today' ? 'Move to Active' : 'Move to Today'}
+              >
+                {todoView === 'backburner' ? (
+                  <ChevronsLeft className="h-5 w-5" />
+                ) : todoView === 'today' ? (
+                  <ChevronsRight className="h-5 w-5" />
+                ) : (
+                  <ChevronsLeft className="h-5 w-5" />
+                )}
+              </button>
 
-              {/* Delete Action */}
+              {/* 9. Delete Action */}
               <button 
                 onClick={() => { 
                   setTodos(prev => prev.filter(t => t.id !== todo.id)); 
@@ -1515,9 +1491,7 @@ export default function Home() {
                 className="p-2.5 rounded-full transition-all active:scale-90 text-red-500 hover:bg-white/10"
                 title="Delete Task"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
+                <Trash2 className="h-5 w-5" />
               </button>
             </div>
           )}
