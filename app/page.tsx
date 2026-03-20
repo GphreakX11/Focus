@@ -138,6 +138,8 @@ export default function Home() {
   const [selectedTodoId, setSelectedTodoId] = useState(null as string | null);
   const [activeTaskId, setActiveTaskId] = useState(null as string | null);
   const [todoDifficulty, setTodoDifficulty] = useState<'easy'|'medium'|'hard'>('medium');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [todoToDelete, setTodoToDelete] = useState<string | null>(null);
 
   // Gamification State
   const [productivityPoints, setProductivityPoints] = useState(0);
@@ -1243,10 +1245,7 @@ export default function Home() {
   const isAllDone = todos.length > 0 && todos.every(t => t.completed);
   const totalTodos = todos.length;
   const completedTodos = todos.filter(t => t.completed).length;
-  const todoPercent = totalTodos === 0 ? 0 : (completedTodos / totalTodos) * 100;
-  const ringRadius = 36;
-  const ringCircumference = 2 * Math.PI * ringRadius;
-  const ringOffset = ringCircumference - (todoPercent / 100) * ringCircumference;
+
 
   const visibleTodos = sortTodos(todos.filter(t => {
     if (todoView === 'backburner') return !!t.backburner;
@@ -1490,8 +1489,8 @@ export default function Home() {
               {/* 9. Delete Action */}
               <button 
                 onClick={() => { 
-                  setTodos(prev => prev.filter(t => t.id !== todo.id)); 
-                  setSelectedTodoId(null); 
+                  setTodoToDelete(todo.id);
+                  setShowDeleteConfirm(true);
                 }} 
                 className="p-2.5 rounded-full transition-all active:scale-90 text-red-500 hover:bg-white/10"
                 title="Delete Task"
@@ -1590,40 +1589,34 @@ export default function Home() {
           </svg>
         </button>
 
-        {/* To-Do Progress Ring */}
+        {/* Habit Progress Graphic */}
         <div className="flex flex-col gap-4 mb-8">
           <h2 className="text-xl font-bold text-white/80 tracking-tight flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-            Locked In
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            Habit Traction
           </h2>
           <div className="flex flex-col items-center justify-center gap-4 p-6 rounded-xl border border-white/10 bg-white/5 shadow-inner">
             <div className="relative w-24 h-24 flex items-center justify-center">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                 {/* Background Track */}
-                <circle 
-                  cx="50" cy="50" r={ringRadius} 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="8" 
-                  className="text-white/10" 
-                />
+                <circle cx="50" cy="50" r="36" fill="none" stroke="currentColor" strokeWidth="8" className="text-emerald-950/40" />
                 {/* Progress Ring */}
                 <circle 
-                  cx="50" cy="50" r={ringRadius} 
+                  cx="50" cy="50" r="36" 
                   fill="none" 
                   stroke="currentColor" 
                   strokeWidth="8" 
-                  strokeLinecap="round"
-                  className="text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.5)] transition-all duration-1000 ease-out"
-                  strokeDasharray={ringCircumference}
-                  strokeDashoffset={ringOffset}
+                  strokeLinecap="round" 
+                  className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all duration-1000 ease-out" 
+                  strokeDasharray="226.19" 
+                  strokeDashoffset={226.19 - ((habits.length === 0 ? 0 : habits.filter(h => h.completed).length / habits.length) * 226.19)} 
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-xl font-bold text-white/90">{Math.round(todoPercent)}%</span>
+                <span className="text-xl font-bold text-white/90">{Math.round(habits.length === 0 ? 0 : (habits.filter(h => h.completed).length / habits.length) * 100)}%</span>
               </div>
             </div>
-            <p className="text-xs text-white/50">{completedTodos} of {totalTodos} completed</p>
+            <p className="text-xs text-white/50">{habits.filter(h => h.completed).length} of {habits.length} habits completed</p>
           </div>
         </div>
         {/* Habits Section */}
@@ -1727,16 +1720,32 @@ export default function Home() {
           <div className="w-full max-w-xl p-4 sm:p-6 flex flex-col items-center justify-center relative group animate-in fade-in slide-in-from-top-4 duration-700">
             <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col gap-4 shadow-lg w-full">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-amber-500/20 rounded-xl">
-                      <Sparkles className="h-5 w-5 text-amber-400" />
+                  <div className="flex items-center gap-2">
+                    {/* Ring */}
+                    <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
+                      {(() => {
+                        const targetPoints = 50;
+                        const fillPercent = Math.min((productivityPoints / targetPoints) * 100, 100);
+                        const radius = 24;
+                        const circumference = 2 * Math.PI * radius;
+                        const offset = circumference - (fillPercent / 100) * circumference;
+                        return (
+                          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 56 56">
+                            <circle cx="28" cy="28" r={radius} fill="none" stroke="currentColor" strokeWidth="4.5" className="text-teal-950/60" />
+                            <circle cx="28" cy="28" r={radius} fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" className="text-[#00B2A9] drop-shadow-[0_0_6px_rgba(0,178,169,0.4)] transition-all duration-1000 ease-out" strokeDasharray={circumference} strokeDashoffset={offset} />
+                          </svg>
+                        );
+                      })()}
                     </div>
-                    <div>
+                    {/* Points Content */}
+                    <div className="flex flex-col justify-center gap-0.5">
                       <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
-                      <div className="flex justify-start items-center gap-3">
-                        <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
-                        <div className="flex items-center gap-2 pr-4">
-                          <div className="h-6 w-16 opacity-80">
+                      <div className="flex items-baseline gap-2">
+                        <div className="text-3xl font-black text-white leading-none tracking-tighter">{productivityPoints}</div>
+                        <div className="text-[10px] font-bold text-[#00B2A9]/60 uppercase tracking-widest">Target: 50</div>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 pr-4">
+                        <div className="h-5 w-16 opacity-80">
                             <ResponsiveContainer width="100%" height="100%">
                               <LineChart data={Object.entries(dailyPointsHistory).sort((a,b)=>a[0].localeCompare(b[0])).slice(-7).map(d=>({points:d[1]}))}>
                                 <Line type="monotone" dataKey="points" stroke="#fcd34d" strokeWidth={2.5} dot={false} />
@@ -1756,7 +1765,6 @@ export default function Home() {
                             return <span className={`text-[10px] uppercase font-bold tracking-widest ${trendColor}`}>{trendText}</span>;
                           })()}
                         </div>
-                      </div>
                     </div>
                   </div>
                   <div className="text-right flex flex-col gap-1 items-end">
@@ -2755,6 +2763,64 @@ export default function Home() {
                 <ArrowLeft className="h-4 w-4 opacity-0 -ml-6 group-hover:opacity-100 group-hover:ml-0 transition-all" />
                 Minimize Focus Mode
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300"
+          onClick={() => {
+            setShowDeleteConfirm(false);
+            setTodoToDelete(null);
+          }}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          
+          {/* Modal Content */}
+          <div 
+            className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-3xl p-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-6">
+              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                <Trash2 className="h-8 w-8 text-red-500" />
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-white">Delete this task?</h3>
+                <p className="text-white/50 text-sm leading-relaxed">
+                  This action is permanent and cannot be undone. Are you sure?
+                </p>
+              </div>
+
+              <div className="flex w-full gap-3 mt-2">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setTodoToDelete(null);
+                  }}
+                  className="flex-1 px-6 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold transition-all active:scale-95"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (todoToDelete) {
+                      setTodos(prev => prev.filter(t => t.id !== todoToDelete));
+                    }
+                    setShowDeleteConfirm(false);
+                    setTodoToDelete(null);
+                    setSelectedTodoId(null);
+                  }}
+                  className="flex-1 px-6 py-4 rounded-2xl bg-red-500 text-white font-bold shadow-lg shadow-red-500/20 hover:bg-red-600 transition-all active:scale-95"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
