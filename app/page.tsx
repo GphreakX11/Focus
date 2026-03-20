@@ -56,6 +56,17 @@ interface WakeLockSentinel extends EventTarget {
 
 const DEFAULT_HABITS: Habit[] = [];
 
+const DEFAULT_CHARGE_CODES = [
+  '8100|IN-HOUSE TRAINING-09718100',
+  '1000|EXPENSE ADMIN',
+  '3030|UNANET LABOR SUSPENSE',
+  '230000|IHS-HSS-SELLPOOL-DS',
+  '230115|USCIS-EAUTO (R)-JUL2026',
+  '230129|TSA-SST 5.0 (R)-OCT2026',
+  '230140|CISA-CISA CYBER CAMPAIGN-NONE',
+  '130044|TSA-SST 5.0 (R)-NOV2026'
+];
+
 const getTodayStr = () => new Date().toLocaleDateString('en-CA');
 
 export default function Home() {
@@ -162,7 +173,7 @@ export default function Home() {
   const [viewingTimesheet, setViewingTimesheet] = useState<TimesheetHistory | null>(null);
   const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(new Set());
   const [editingRows, setEditingRows] = useState<TimecardRow[]>([]);
-  const [savedChargeCodes, setSavedChargeCodes] = useState([] as string[]);
+  const [savedChargeCodes, setSavedChargeCodes] = useState(DEFAULT_CHARGE_CODES);
   const [isTimecardView, setIsTimecardView] = useState(false);
 
 
@@ -652,7 +663,12 @@ export default function Home() {
     const savedCodes = localStorage.getItem('focus-charge-codes');
     if (savedCodes) {
       try {
-        setSavedChargeCodes(JSON.parse(savedCodes));
+        const parsed = JSON.parse(savedCodes);
+        if (Array.isArray(parsed)) {
+          // Merge defaults with saved codes, unique only
+          const merged = Array.from(new Set([...DEFAULT_CHARGE_CODES, ...parsed]));
+          setSavedChargeCodes(merged);
+        }
       } catch (e) {}
     }
 
@@ -1429,15 +1445,6 @@ export default function Home() {
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </div>
-          )}
-                className="p-3 rounded-xl transition-all active:scale-90 text-red-500/40 hover:text-red-500 hover:bg-red-500/10"
-                title="Delete forever"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
               </button>
             </div>
