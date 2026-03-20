@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     });
 
     const result = await generateText({
-      model: google('gemini-2.5-flash') as any,
+      model: google('gemini-3-flash-preview') as any,
       system: `You are a highly capable AI Meeting Assistant. The user's name is ${userName || 'the user'}. 
                Your goal is to process meeting transcripts and provide high-value insights.
                Please provide:

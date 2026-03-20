@@ -1,7 +1,19 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus, ArrowLeft, Target, Play, Pause } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Copy, Plus, ArrowLeft, Target, Play, Pause } from 'lucide-react';
+
+// Dynamic Recharts Imports for SSR safety
+const ComposedChart = dynamic(() => import('recharts').then(mod => mod.ComposedChart), { ssr: false });
+const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false });
+const Area = dynamic(() => import('recharts').then(mod => mod.Area), { ssr: false });
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false });
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false });
+const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false });
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
+const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false });
 
 import { analyzeCalendar } from './calendar-actions';
 
@@ -55,6 +67,17 @@ interface WakeLockSentinel extends EventTarget {
 }
 
 const DEFAULT_HABITS: Habit[] = [];
+
+const DEFAULT_CHARGE_CODES = [
+  '8100|IN-HOUSE TRAINING-09718100',
+  '1000|EXPENSE ADMIN',
+  '3030|UNANET LABOR SUSPENSE',
+  '230000|IHS-HSS-SELLPOOL-DS',
+  '230115|USCIS-EAUTO (R)-JUL2026',
+  '230129|TSA-SST 5.0 (R)-OCT2026',
+  '230140|CISA-CISA CYBER CAMPAIGN-NONE',
+  '130044|TSA-SST 5.0 (R)-NOV2026'
+];
 
 const getTodayStr = () => new Date().toLocaleDateString('en-CA');
 
@@ -120,6 +143,7 @@ export default function Home() {
   // Zen Focus Mode State
   const [isFocusModeActive, setIsFocusModeActive] = useState(false);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+  const hasAwardedFocusPoints = useRef(false);
 
 
   // AI Meeting Assistant State
@@ -145,9 +169,7 @@ export default function Home() {
     });
   };
 
-
   const [completion, setCompletion] = useState('');
-
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Calendar Analyzer State
@@ -162,8 +184,11 @@ export default function Home() {
   const [viewingTimesheet, setViewingTimesheet] = useState<TimesheetHistory | null>(null);
   const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(new Set());
   const [editingRows, setEditingRows] = useState<TimecardRow[]>([]);
-  const [savedChargeCodes, setSavedChargeCodes] = useState([] as string[]);
-  const [isTimecardView, setIsTimecardView] = useState(false);
+  const [savedChargeCodes, setSavedChargeCodes] = useState(DEFAULT_CHARGE_CODES);
+  const [timecardViewMode, setTimecardViewMode] = useState<'raw' | 'daily' | 'weekly'>('raw');
+  const [selectedDayFilter, setSelectedDayFilter] = useState('Monday');
+  const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
+  const [manualEntryForm, setManualEntryForm] = useState({ activity: '', day: 'Monday', hours: '1.0', chargeCode: DEFAULT_CHARGE_CODES[0] });
 
 
   const saveToCalendarHistory = (markdown: string, tasks?: { task_name: string, related_meeting: string }[]) => {
@@ -219,20 +244,37 @@ export default function Home() {
           }
 
           return {
-            id: `row-${idx}-${Date.now()}`,
+            id: `row-${idx}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             day: day || lastDay,
             activity,
             hours: hours || '0.00',
             chargeCode: ''
           };
         })
-
-        .filter(r => r !== null);
+        .filter(r => r !== null) as TimecardRow[];
       
-      setEditingRows(rows as TimecardRow[]);
+      if (rows.length > 0) {
+        // Auto-consolidate logic: Group by first 3 words of activity
+        const consolidated = rows.reduce((acc, row) => {
+          const first3Words = row.activity.split(' ').slice(0, 3).join(' ').toLowerCase();
+          const key = `${row.day}-${first3Words}`;
+          const existing = acc.find(r => `${r.day}-${r.activity.split(' ').slice(0, 3).join(' ').toLowerCase()}` === key);
+          
+          if (existing) {
+            existing.hours = (parseFloat(existing.hours) + parseFloat(row.hours)).toFixed(2);
+          } else {
+            acc.push({...row});
+          }
+          return acc;
+        }, [] as TimecardRow[]);
+
+        setEditingRows(prev => {
+          const next = [...prev, ...consolidated];
+          // Basic de-dupe to prevent accidental double-parsing of the same exact line
+          return next;
+        });
+      }
       setIsAiDrawerOpen(false);
-    } else {
-      setEditingRows([]);
     }
   }, [viewingTimesheet]);
 
@@ -652,7 +694,21 @@ export default function Home() {
     const savedCodes = localStorage.getItem('focus-charge-codes');
     if (savedCodes) {
       try {
-        setSavedChargeCodes(JSON.parse(savedCodes));
+        const parsed = JSON.parse(savedCodes);
+        if (Array.isArray(parsed)) {
+          // Merge defaults with saved codes, unique only
+          const merged = Array.from(new Set([...DEFAULT_CHARGE_CODES, ...parsed]));
+          setSavedChargeCodes(merged);
+        }
+      } catch (e) {}
+    }
+
+    // Load Master Timesheet
+    const savedMaster = localStorage.getItem('focus-master-timesheet');
+    if (savedMaster) {
+      try {
+        const parsed = JSON.parse(savedMaster);
+        if (Array.isArray(parsed)) setEditingRows(parsed);
       } catch (e) {}
     }
 
@@ -668,6 +724,7 @@ export default function Home() {
       localStorage.setItem('focus-duration', focusDuration.toString());
       localStorage.setItem('break-duration', breakDuration.toString());
       localStorage.setItem('focus-habits', JSON.stringify(habits));
+      localStorage.setItem('focus-master-timesheet', JSON.stringify(editingRows));
       if (activeTaskId) localStorage.setItem('focus-active-id', activeTaskId);
     }
   }, [todos, focusDuration, breakDuration, habits, activeTaskId, mounted]);
@@ -857,6 +914,11 @@ export default function Home() {
             navigator.mediaSession.playbackState = 'paused';
           }
           
+          if (!hasAwardedFocusPoints.current) {
+            updatePoints(50);
+            hasAwardedFocusPoints.current = true;
+          }
+          
           if (timerMode === 'focus') {
             setTimerMode('break');
             setTimeLeft(breakDuration * 60);
@@ -937,6 +999,7 @@ export default function Home() {
     
     // Trigger immersive DND reminder specifically when STARTING a Focus block
     if (!isRunning && timerMode === 'focus') {
+      hasAwardedFocusPoints.current = false;
       setShowDndReminder(true);
       setTimeout(() => {
         setShowDndReminder(false);
@@ -952,6 +1015,7 @@ export default function Home() {
     setTimerMode('focus');
     setTimeLeft(focusDuration * 60);
     setActiveTaskId(null);
+    hasAwardedFocusPoints.current = false;
   };
 
 
@@ -1168,241 +1232,251 @@ export default function Home() {
       {visibleTodos.map((todo, index) => (
         <div 
           key={todo.id} 
-          className={`w-full rounded-xl transition-all duration-300 ${selectedTodoId === todo.id ? 'relative z-[45] bg-white/10 shadow-2xl scale-[1.02] py-1 px-2' : ''}`}
+          draggable={todoView !== 'backburner'}
+          onDragStart={(e) => handleDragStart(e, index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDrop={(e) => handleDrop(e, index)}
+          onDragEnd={handleDragEnd}
+          className={`w-full rounded-xl transition-all duration-300 ${
+            selectedTodoId === todo.id 
+              ? 'relative z-[45] bg-white/10 shadow-2xl scale-[1.02] py-2 px-3' 
+              : 'hover:bg-white/5 py-1 px-2'
+          } ${dragOverTodoIndex === index ? 'border-t-2 border-indigo-500 bg-white/5' : ''}`}
         >
-          <div className="flex items-center gap-3 w-full py-2">
-            {todoView === 'backburner' && (
-              <button 
-                onClick={() => {
-                  setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
-                }}
-                className="p-1.5 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-95 transition-all shrink-0"
-                title="Reactivate Task"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-            )}
-            <input
-              type="checkbox"
-              checked={todo.completed}
-              onClick={(e) => e.stopPropagation()}
-              onChange={() => handleToggleTodo(todo.id)}
-              className="check-input w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 shrink-0"
-            />
+          <div className="flex items-center gap-3 w-full min-h-[48px]">
+            {/* Action Zone (Left) - Unified Single Source of Truth */}
+            <div className="w-12 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  checked={todo.completed}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => handleToggleTodo(todo.id)}
+                  className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                />
+              </div>
+            </div>
 
+            {/* Content Area */}
             {editingTodoId === todo.id ? (
-                <div className="flex-1 flex flex-col gap-3">
-                  <input
-                    type="text"
-                    value={editingTodoText}
-                    onChange={(e) => setEditingTodoText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveTodo(todo.id);
-                      if (e.key === 'Escape') setEditingTodoId(null);
-                    }}
-                    autoFocus
-                    className="flex-1 bg-transparent border-b-2 border-white/50 outline-none text-lg sm:text-2xl font-sans font-medium text-white min-w-0"
-                  />
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase font-bold text-white/40 ml-1">Due Date:</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={editingTodoDate}
-                        onChange={(e) => setEditingTodoDate(e.target.value)}
-                        className="bg-white/10 border-none rounded-lg px-2 py-2 text-sm text-white outline-none focus:bg-white/20 transition-all font-sans flex-1 min-h-[44px]"
-                      />
-                      <button 
-                        onClick={() => handleSaveTodo(todo.id)}
-                        className="p-2 rounded-xl bg-indigo-500 text-white shadow-lg active:scale-90 transition-all"
-                        title="Save Changes"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </button>
-                      <button 
-                        onClick={() => setEditingTodoId(null)}
-                        className="p-2 rounded-xl bg-white/10 text-white/50 hover:text-white active:scale-90 transition-all"
-                        title="Cancel"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
+              <div className="flex-1 flex flex-col gap-3">
+                <input
+                  type="text"
+                  value={editingTodoText}
+                  onChange={(e) => setEditingTodoText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveTodo(todo.id);
+                    if (e.key === 'Escape') setEditingTodoId(null);
+                  }}
+                  autoFocus
+                  className="flex-1 bg-transparent border-b-2 border-white/50 outline-none text-lg sm:text-2xl font-sans font-medium text-white min-w-0"
+                />
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] uppercase font-bold text-white/40 ml-1">Due Date:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={editingTodoDate}
+                      onChange={(e) => setEditingTodoDate(e.target.value)}
+                      className="bg-white/10 border-none rounded-lg px-2 py-2 text-sm text-white outline-none focus:bg-white/20 transition-all font-sans flex-1 min-h-[44px]"
+                    />
+                    <button 
+                      onClick={() => handleSaveTodo(todo.id)}
+                      className="p-2 rounded-xl bg-indigo-500 text-white shadow-lg active:scale-90 transition-all"
+                      title="Save Changes"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={() => setEditingTodoId(null)}
+                      className="p-2 rounded-xl bg-white/10 text-white/50 hover:text-white active:scale-90 transition-all"
+                      title="Cancel"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
+              </div>
             ) : (
               <button 
-                onClick={() => {
-                  if (selectedTodoId === todo.id) {
-                    setSelectedTodoId(null);
-                  } else {
-                    setSelectedTodoId(todo.id);
-                  }
-                }}
+                onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
                 className={`flex-1 text-left transition-all duration-300 min-w-0 outline-none group/text ${activeTaskId === todo.id ? 'scale-[1.03] origin-left' : ''}`}
               >
-                <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none block ${todo.completed ? 'line-through text-white/40' : todo.dueDate === getTodayStr() ? 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.4)]' : todo.important ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]' : 'text-white'} ${activeTaskId === todo.id ? 'text-indigo-300 drop-shadow-[0_0_12px_rgba(129,140,248,0.4)]' : 'group-hover/text:text-white/90'}`}>
+                <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none block ${
+                  todo.completed && todoView !== 'backburner' 
+                    ? 'line-through text-white/40' 
+                    : todo.dueDate === getTodayStr() 
+                      ? 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.4)]' 
+                      : todo.important 
+                        ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
+                        : 'text-white'
+                } ${activeTaskId === todo.id ? 'text-indigo-300 drop-shadow-[0_0_12px_rgba(129,140,248,0.4)]' : 'group-hover/text:text-white/90'}`}>
                   {todo.text}
                 </span>
               </button>
             )}
-            {todo.dueDate && editingTodoId !== todo.id && (
-              <span className={`px-2 py-1 rounded-lg text-xs sm:text-xs font-bold tracking-tight shrink-0 transition-all flex items-center gap-1.5 ${todo.dueDate === getTodayStr() ? 'bg-red-500 text-white border border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-white/10 text-white/90 border border-white/20'}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                {todo.dueDate === getTodayStr() ? 'Today' : todo.dueDate}
-              </span>
-            )}
-            {activeTaskId === todo.id && isRunning && (
-              <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-indigo-500/30 text-indigo-200 text-[10px] font-bold tracking-widest uppercase animate-pulse shadow-[0_0_15px_rgba(99,102,241,0.3)] shrink-0">
-                Focusing
-              </div>
-            )}
-            {todo.important && selectedTodoId !== todo.id && activeTaskId !== todo.id && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
-            )}
-            {todoView === 'active' && !todo.completed && (
+
+            {/* Status & Indicators */}
+            <div className="flex items-center gap-2 shrink-0">
+              {todo.dueDate && editingTodoId !== todo.id && (
+                <span className={`px-2 py-1 rounded-lg text-xs sm:text-xs font-bold tracking-tight shrink-0 transition-all flex items-center gap-1.5 ${todo.dueDate === getTodayStr() ? 'bg-red-500 text-white border border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-white/10 text-white/90 border border-white/20'}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {todo.dueDate === getTodayStr() ? 'Today' : todo.dueDate}
+                </span>
+              )}
+              {/* Tap target — opens action bar without requiring a full-row press */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTaskId(todo.id);
-                  setFocusedTaskId(todo.id);
-                  setIsFocusModeActive(true);
-                  if (!isRunning) setIsRunning(true);
-                }}
-                className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-400/10 active:scale-90 transition-all shrink-0"
-                title="Zen Focus Mode"
-              >
-                <Target className="h-5 w-5 stroke-[2.5]" />
-              </button>
-            )}
-            {/* Tap target — opens action bar without requiring a full-row press */}
-            <button
-              onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
-              className={`ml-auto px-2 py-1 rounded-full text-xs transition-all shrink-0 ${
-                selectedTodoId === todo.id
-                  ? 'bg-white/15 text-white/80'
-                  : 'bg-white/5 text-white/20 hover:text-white/50'
-              }`}
-            >···</button>
+                onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
+                className={`px-2 py-1 rounded-full text-xs transition-all shrink-0 ${
+                  selectedTodoId === todo.id
+                    ? 'bg-white/15 text-white/80'
+                    : 'bg-white/5 text-white/20 hover:text-white/50'
+                }`}
+              >···</button>
+            </div>
           </div>
           {/* COMPACT Action Drawer: Horizontal Icon Bar */}
           {selectedTodoId === todo.id && (
             <div 
-              className="w-full mt-3 p-2 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-around animate-slide-down relative"
+              className="w-full mt-3 p-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-between animate-slide-down shadow-xl relative"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Focus Icon Action */}
-              <button 
-                onClick={() => {
-                  setActiveTaskId(activeTaskId === todo.id ? null : todo.id);
-                  if (activeTaskId !== todo.id && !isRunning) toggleTimer();
-                  setSelectedTodoId(null);
-                }}
-                className={`p-3 rounded-xl transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-indigo-400 hover:bg-indigo-500/10'}`}
-                title={activeTaskId === todo.id ? 'Stop Focus' : 'Start Focus'}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </button>
+              {/* Focus Target Action / Reactivate Arrow */}
+              {todoView === 'backburner' ? (
+                <button 
+                  onClick={() => {
+                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
+                    setSelectedTodoId(null);
+                  }}
+                  className="p-2.5 rounded-full transition-all active:scale-90 text-orange-400 hover:bg-white/10"
+                  title="Reactivate Task"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setActiveTaskId(todo.id);
+                    setFocusedTaskId(todo.id);
+                    setIsFocusModeActive(true);
+                    setSelectedTodoId(null);
+                  }}
+                  className={`p-2.5 rounded-full transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-lg' : 'text-indigo-400 hover:bg-white/10'}`}
+                  title="Enter Focus Mode"
+                >
+                  <Target className="h-5 w-5 stroke-[2.5]" />
+                </button>
+              )}
               
-              {/* Star Icon Action */}
+              {/* Star Action */}
               <button 
                 onClick={() => handleToggleStar(todo.id)} 
-                className={`p-3 rounded-xl transition-all active:scale-90 ${todo.important ? 'text-amber-400 bg-amber-400/10 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : 'text-amber-400/60 hover:text-amber-400 hover:bg-amber-400/10'}`}
+                className={`p-2.5 rounded-full transition-all active:scale-90 ${todo.important ? 'text-amber-400 bg-amber-400/20' : 'text-white/40 hover:text-amber-400 hover:bg-white/10'}`}
                 title={todo.important ? 'Remove Priority' : 'Mark Priority'}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
               </button>
 
-              {/* Backburner Icon Toggle */}
+              {/* Backburner Toggle */}
               <button 
-                onClick={() => { setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: !t.backburner } : t)); setSelectedTodoId(null); }} 
-                className={`p-3 rounded-xl transition-all active:scale-90 ${todo.backburner ? 'text-orange-400 bg-orange-400/10 shadow-[0_0_15px_rgba(251,146,60,0.3)]' : 'text-white/40 hover:text-orange-400 hover:bg-orange-500/10'}`}
-                title={todo.backburner ? 'Move to Today' : 'Move to Later'}
+                onClick={() => { 
+                  setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: !t.backburner } : t)); 
+                  setSelectedTodoId(null); 
+                }} 
+                className={`p-2.5 rounded-full transition-all active:scale-90 ${todo.backburner ? 'bg-orange-500/30 text-orange-400' : 'text-white/40 hover:text-orange-400 hover:bg-white/10'}`}
+                title={todo.backburner ? 'Move to Active' : 'Move to Backburner'}
               >
-                <div className="text-xl leading-none grayscale-[0.5] hover:grayscale-0 transition-all">🔥</div>
+                <span className="text-xl leading-none">🔥</span>
               </button>
 
-              {/* Rename Icon Action */}
+              {/* Rename Action */}
               <button 
-                onClick={() => { setEditingTodoId(todo.id); setEditingTodoText(todo.text); setEditingTodoDate(todo.dueDate || ''); setSelectedTodoId(null); }} 
-                className="p-3 rounded-xl transition-all active:scale-90 text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-500/10"
+                onClick={() => { 
+                  setEditingTodoId(todo.id); 
+                  setEditingTodoText(todo.text); 
+                  setEditingTodoDate(todo.dueDate || ''); 
+                  setSelectedTodoId(null); 
+                }} 
+                className="p-2.5 rounded-full transition-all active:scale-90 text-emerald-400 hover:bg-white/10"
                 title="Rename Task"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                 </svg>
               </button>
 
-              {/* Move Up/Down Buttons */}
-              {!todo.completed && (
+              {/* Move Up/Down (Hide for Backburner) */}
+              {todoView !== 'backburner' && !todo.completed && (
                 <>
                   <button
-                    onClick={() => { moveTodo(todo.id, 'up'); }}
-                    className="p-3 rounded-xl transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
+                    onClick={() => moveTodo(todo.id, 'up')}
+                    className="p-2.5 rounded-full transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
                     title="Move Up"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                     </svg>
                   </button>
                   <button
-                    onClick={() => { moveTodo(todo.id, 'down'); }}
-                    className="p-3 rounded-xl transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
+                    onClick={() => moveTodo(todo.id, 'down')}
+                    className="p-2.5 rounded-full transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
                     title="Move Down"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
 
-                  {/* Move Between Today/Active buttons */}
+                  {/* Move Between Today/Active */}
                   {todoView === 'today' ? (
                     <button 
                       onClick={() => {
                         setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: true, activeSince: new Date().toLocaleDateString('en-CA') } : t));
                         setSelectedTodoId(null);
                       }}
-                      className="p-3 rounded-xl transition-all active:scale-90 text-indigo-400 hover:text-white hover:bg-indigo-500/20"
+                      className="p-2.5 rounded-full transition-all active:scale-90 text-indigo-400 hover:bg-white/10"
                       title="Move to Active"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                       </svg>
                     </button>
-                  ) : todoView === 'active' ? (
+                  ) : (
                     <button 
                       onClick={() => {
                         setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: false } : t));
                         setSelectedTodoId(null);
                       }}
-                      className="p-3 rounded-xl transition-all active:scale-90 text-indigo-400 hover:text-white hover:bg-indigo-500/20"
-                      title="Move back to Today"
+                      className="p-2.5 rounded-full transition-all active:scale-90 text-indigo-400 hover:bg-white/10"
+                      title="Move to Today"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
                       </svg>
                     </button>
-                  ) : null}
+                  )}
                 </>
               )}
 
-              {/* Delete Icon Action */}
+              {/* Delete Action */}
               <button 
-                onClick={() => { setTodos(prev => prev.filter(t => t.id !== todo.id)); setSelectedTodoId(null); }} 
-                className="p-3 rounded-xl transition-all active:scale-90 text-red-500/40 hover:text-red-500 hover:bg-red-500/10"
-                title="Delete forever"
+                onClick={() => { 
+                  setTodos(prev => prev.filter(t => t.id !== todo.id)); 
+                  setSelectedTodoId(null); 
+                }} 
+                className="p-2.5 rounded-full transition-all active:scale-90 text-red-500 hover:bg-white/10"
+                title="Delete Task"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </button>
             </div>
@@ -1629,32 +1703,68 @@ export default function Home() {
       {!isFocusModeActive && (
         <div className="sticky top-0 z-[60] w-full flex flex-col items-center gap-4 bg-transparent pb-4 px-4" style={{ paddingTop: 'var(--safe-top)' }}>
           <div className="w-full max-w-xl p-4 sm:p-6 flex flex-col items-center justify-center relative group animate-in fade-in slide-in-from-top-4 duration-700">
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-lg w-full">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500/20 rounded-xl">
-                  <Sparkles className="h-5 w-5 text-amber-400" />
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col gap-4 shadow-lg w-full">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/20 rounded-xl">
+                    <Sparkles className="h-5 w-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
+                    <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
-                  <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
+                  <div className="flex items-center gap-2 justify-end">
+                    <div className="text-sm font-bold text-emerald-400">
+                      Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
-                <div className="flex items-center gap-2 justify-end">
-                  <div className="text-sm font-bold text-emerald-400">
-                    Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
-                  </div>
-                  {(() => {
-                    const yesterday = new Date();
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    const yesterdayStr = yesterday.toLocaleDateString('en-CA');
-                    const yesterdayScore = dailyPointsHistory[yesterdayStr] || 0;
-                    const diff = productivityPoints - yesterdayScore;
-                    if (diff > 0) return <span className="text-[10px] font-bold text-emerald-400 px-1.5 py-0.5 bg-emerald-400/10 rounded-md">+{diff} vs Yesterday</span>;
-                    if (diff < 0) return <span className="text-[10px] font-bold text-red-400 px-1.5 py-0.5 bg-red-400/10 rounded-md">{diff} vs Yesterday</span>;
-                    return <span className="text-[10px] font-bold text-white/20 px-1.5 py-0.5 bg-white/5 rounded-md">Steady</span>;
-                  })()}
+
+              {/* Productivity Chart */}
+              <div className="w-full h-[250px] mt-2 bg-black/20 rounded-xl p-2 border border-white/5" style={{ minHeight: '300px' }}>
+                <div style={{ width: '100%', height: '300px', minHeight: '300px' }}>
+                  <ResponsiveContainer width="100%" height="100%" minHeight={250}>
+                    <ComposedChart
+                      data={Object.entries(dailyPointsHistory)
+                        .sort((a, b) => a[0].localeCompare(b[0]))
+                        .slice(-7)
+                        .map(([date, points]) => ({
+                          date: date.split('-').slice(1).join('/'),
+                          points
+                        }))}
+                      margin={{ top: 10, right: 10, bottom: 0, left: -20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
+                      />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                        itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
+                      />
+                      <Area type="monotone" dataKey="points" fill="url(#colorPoints)" stroke="none" />
+                      <Bar dataKey="points" barSize={12} fill="#818cf8" radius={[4, 4, 0, 0]} />
+                      <Line type="monotone" dataKey="points" stroke="#fcd34d" strokeWidth={3} dot={{ r: 4, fill: '#fcd34d' }} />
+                      <defs>
+                        <linearGradient id="colorPoints" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                    </ComposedChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
@@ -2178,165 +2288,265 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* View Toggle */}
               <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
                 <button 
-                  onClick={() => setIsTimecardView(false)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${!isTimecardView ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                  onClick={() => setTimecardViewMode('raw')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timecardViewMode === 'raw' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
                 >
                   Raw View
                 </button>
                 <button 
-                  onClick={() => setIsTimecardView(true)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${isTimecardView ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                  onClick={() => setTimecardViewMode('daily')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timecardViewMode === 'daily' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
                 >
-                  Timecard View
+                  Daily
+                </button>
+                <button 
+                  onClick={() => setTimecardViewMode('weekly')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timecardViewMode === 'weekly' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                >
+                  Weekly
                 </button>
               </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-8 font-sans text-left bg-gradient-to-b from-transparent to-black/20">
+                {/* Manual Entry Button & Form */}
+                <div className="flex items-center justify-between mb-6">
+                  <button 
+                    onClick={() => setIsManualEntryOpen(!isManualEntryOpen)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl font-bold text-xs transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Manual Activity
+                  </button>
+
+                  {timecardViewMode === 'daily' && (
+                    <div className="flex gap-1.5 p-1 bg-black/20 rounded-xl border border-white/5">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                        const fullDay = day === 'Mon' ? 'Monday' : 
+                                      day === 'Tue' ? 'Tuesday' : 
+                                      day === 'Wed' ? 'Wednesday' : 
+                                      day === 'Thu' ? 'Thursday' : 
+                                      day === 'Fri' ? 'Friday' : 
+                                      day === 'Sat' ? 'Saturday' : 'Sunday';
+                        return (
+                          <button 
+                            key={day}
+                            onClick={() => setSelectedDayFilter(fullDay)}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedDayFilter === fullDay ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {isManualEntryOpen && (
+                  <div className="mb-8 p-6 bg-white/5 border border-white/10 rounded-[2rem] animate-in slide-in-from-top-4 duration-300 shadow-2xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-black text-white/40 tracking-widest px-1">Activity Name</label>
+                        <input 
+                          type="text"
+                          value={manualEntryForm.activity}
+                          onChange={(e) => setManualEntryForm({...manualEntryForm, activity: e.target.value})}
+                          className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-all outline-none"
+                          placeholder="Meeting, Review, etc..."
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-black text-white/40 tracking-widest px-1">Day</label>
+                        <select 
+                          value={manualEntryForm.day}
+                          onChange={(e) => setManualEntryForm({...manualEntryForm, day: e.target.value})}
+                          className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-all outline-none appearance-none"
+                        >
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                            <option key={d} value={d} className="bg-slate-900">{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-black text-white/40 tracking-widest px-1">Hours</label>
+                        <input 
+                          type="number"
+                          step="0.25"
+                          value={manualEntryForm.hours}
+                          onChange={(e) => setManualEntryForm({...manualEntryForm, hours: e.target.value})}
+                          className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-all outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-black text-white/40 tracking-widest px-1">Charge Code</label>
+                        <select 
+                          value={manualEntryForm.chargeCode}
+                          onChange={(e) => setManualEntryForm({...manualEntryForm, chargeCode: e.target.value})}
+                          className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-all outline-none appearance-none"
+                        >
+                          {savedChargeCodes.map(code => (
+                            <option key={code} value={code} className="bg-slate-900">{code}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <button 
+                        onClick={() => {
+                          const newRow: TimecardRow = {
+                            id: Math.random().toString(36).substr(2, 9),
+                            day: manualEntryForm.day,
+                            activity: manualEntryForm.activity,
+                            hours: manualEntryForm.hours,
+                            chargeCode: manualEntryForm.chargeCode
+                          };
+                          setEditingRows([...editingRows, newRow]);
+                          setManualEntryForm({ activity: '', day: manualEntryForm.day, hours: '1.0', chargeCode: DEFAULT_CHARGE_CODES[0] });
+                          setIsManualEntryOpen(false);
+                        }}
+                        disabled={!manualEntryForm.activity}
+                        className="px-8 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 uppercase tracking-wider"
+                      >
+                        Submit Activity
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="overflow-x-auto rounded-3xl border border-white/10 mb-8 shadow-inner">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-white/5 text-[10px] uppercase text-white/30 tracking-widest">
                       <tr>
-                        <th className="px-6 py-4 font-black">Day</th>
-                        <th className="px-6 py-4 font-black">Activity Description</th>
-                        <th className="px-6 py-4 font-black">Charge Code</th>
-                        <th className="px-6 py-4 font-black text-right">Hours</th>
-                        <th className="px-2 py-4 w-10"></th>
+                        {timecardViewMode === 'daily' ? (
+                          <>
+                            <th className="px-6 py-4 font-black">Activity Description</th>
+                            <th className="px-6 py-4 font-black">Combined Charge Code</th>
+                            <th className="px-6 py-4 font-black text-right">Total Hours</th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="px-6 py-4 font-black">Day</th>
+                            <th className="px-6 py-4 font-black">Activity Description</th>
+                            <th className="px-6 py-4 font-black">Charge Code</th>
+                            <th className="px-6 py-4 font-black text-right">Hours</th>
+                            <th className="px-2 py-4 w-10"></th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {isTimecardView ? (
-                        /* Timecard View Rendering */
-                        (() => {
-                          const days = Array.from(new Set(editingRows.filter(r => r.day).map(r => r.day)));
-                          return days.map(day => {
-                            const dayRows = editingRows.filter(r => r.day === day);
-                            const groupedByCode: Record<string, number> = {};
-                            dayRows.forEach(r => {
-                              const code = r.chargeCode || 'Unassigned';
-                              const h = parseFloat(r.hours) || 0;
-                              groupedByCode[code] = (groupedByCode[code] || 0) + h;
-                            });
-                            
-                            const totalCharged = Object.values(groupedByCode).reduce((a, b) => a + b, 0);
-                            const adminHours = Math.max(0, 8 - totalCharged);
-                            
-                            return (
-                              <React.Fragment key={day}>
-                                <tr className="bg-white/[0.02]">
-                                  <td colSpan={5} className="px-6 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400/60 border-b border-white/5">{day}</td>
-                                </tr>
-                                {Object.entries(groupedByCode).map(([code, hours]) => (
-                                  <tr key={code} className="hover:bg-white/5 transition-all">
-                                    <td className="px-6 py-3 text-white/20 font-bold">-</td>
-                                    <td className="px-6 py-4 text-white/60 text-xs italic">Grouped Activities</td>
-                                    <td className="px-6 py-3 font-bold text-white">{code}</td>
-                                    <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold">{hours.toFixed(2)}</td>
-                                    <td className="px-2 py-3"></td>
-                                  </tr>
-                                ))}
-                                {adminHours > 0 && (
-                                  <tr className="bg-indigo-500/5 transition-all">
-                                    <td className="px-6 py-3 text-white/20 font-bold">-</td>
-                                    <td className="px-6 py-4 text-indigo-300/80 text-xs font-bold">Daily Admin (Auto-Calculated)</td>
-                                    <td className="px-6 py-3 font-bold text-indigo-300">ADMIN</td>
-                                    <td className="px-6 py-3 text-right text-indigo-300 font-mono font-bold">{adminHours.toFixed(2)}</td>
-                                    <td className="px-2 py-3"></td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
+                      {(() => {
+                        if (timecardViewMode === 'daily') {
+                          // AGGREGATE purely BY ASSIGNED CHARGE CODE
+                          const dayRows = editingRows.filter(r => r.day === selectedDayFilter);
+                          const summaryByCode: Record<string, number> = {};
+                          
+                          dayRows.forEach(r => {
+                            const code = r.chargeCode || 'UNASSIGNED';
+                            const h = parseFloat(r.hours) || 0;
+                            summaryByCode[code] = (summaryByCode[code] || 0) + h;
                           });
-                        })()
-                      ) : (
-                        editingRows.map((row, i) => (
-                          <tr key={row.id} className="group hover:bg-white/5 transition-all">
-                            <td className="px-6 py-3">
-                              <input 
-                                type="text"
-                                value={row.day || '-'}
-                                onChange={(e) => {
-                                  const next = [...editingRows];
-                                  next[i].day = e.target.value;
-                                  setEditingRows(next);
-                                }}
-                                className="bg-transparent border-none outline-none text-white/40 font-bold focus:text-indigo-400 w-full transition-colors"
-                              />
-                            </td>
-                            <td className="px-6 py-4">
-                              <textarea 
-                                value={row.activity}
-                                rows={1}
-                                onChange={(e) => {
-                                  const next = [...editingRows];
-                                  next[i].activity = e.target.value;
-                                  setEditingRows(next);
-                                  e.target.style.height = 'auto';
-                                  e.target.style.height = e.target.scrollHeight + 'px';
-                                }}
-                                className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all resize-none min-h-[1.5rem] leading-relaxed block overflow-hidden"
-                                onFocus={(e) => {
-                                  e.target.style.height = 'auto';
-                                  e.target.style.height = e.target.scrollHeight + 'px';
-                                }}
-                              />
-                            </td>
-                            <td className="px-6 py-3">
-                              <input 
-                                type="text"
-                                list="charge-codes"
-                                value={row.chargeCode || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const next = [...editingRows];
-                                  next[i].chargeCode = val;
-                                  setEditingRows(next);
-                                  
-                                  if (val && !savedChargeCodes.includes(val)) {
-                                    const updatedCodes = [...savedChargeCodes, val];
-                                    setSavedChargeCodes(updatedCodes);
-                                    localStorage.setItem('focus-charge-codes', JSON.stringify(updatedCodes));
-                                  }
-                                }}
-                                placeholder="Code..."
-                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500/50 w-full transition-all"
-                              />
-                              <datalist id="charge-codes">
-                                {savedChargeCodes.map(code => <option key={code} value={code} />)}
-                              </datalist>
-                            </td>
-                            <td className="px-6 py-3 text-right">
-                              <input 
-                                type="text"
-                                value={row.hours}
-                                onChange={(e) => {
-                                  const next = [...editingRows];
-                                  next[i].hours = e.target.value;
-                                  setEditingRows(next);
-                                }}
-                                className="bg-transparent border-none outline-none text-indigo-400 font-mono font-bold text-right w-16 focus:text-white transition-colors"
-                              />
-                            </td>
-                            <td className="px-2 py-3">
-                              <button 
-                                onClick={() => {
-                                  setEditingRows(prev => prev.filter((_, idx) => idx !== i));
-                                }}
-                                className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 transition-all"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
+
+                          const codeEntries = Object.entries(summaryByCode);
+                          const totalCharged = codeEntries.reduce((a, b) => a + b[1], 0);
+                          const adminHours = Math.max(0, 8 - totalCharged);
+
+                          return (
+                            <>
+                              {codeEntries.map(([code, hours]) => (
+                                <tr key={code} className="hover:bg-white/5 transition-all">
+                                  <td className="px-6 py-4 font-medium text-white/50 italic text-xs">Grouped Activities</td>
+                                  <td className="px-6 py-4 font-bold text-white tracking-widest uppercase text-xs">{code}</td>
+                                  <td className="px-6 py-4 text-right text-indigo-400 font-mono font-black text-lg">{hours.toFixed(2)}</td>
+                                </tr>
+                              ))}
+                              
+                              <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
+                                <td className="px-6 py-4">
+                                  <span className="font-medium text-indigo-300/50 italic text-xs">Daily Admin (Auto-Calculated)</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="font-black text-indigo-300 tracking-widest uppercase text-[10px]">8100|IN-HOUSE TRAINING-09718100</span>
+                                </td>
+                                <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
+                              </tr>
+                              
+                              {dayRows.length === 0 && (
+                                <tr>
+                                  <td colSpan={3} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
+                                </tr>
+                              )}
+                            </>
+                          );
+                        } else if (timecardViewMode === 'weekly') {
+                          const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                          const sortedRows = [...editingRows].sort((a, b) => dayOrder.indexOf(a.day || '') - dayOrder.indexOf(b.day || ''));
+                          
+                          return sortedRows.map((row) => (
+                            <tr key={row.id} className="group hover:bg-white/5 transition-all animate-in fade-in duration-300">
+                              <td className="px-6 py-3 text-white/40 font-bold text-[10px] uppercase tracking-wider">{row.day || '-'}</td>
+                              <td className="px-6 py-4 text-white/90 font-medium text-xs leading-relaxed">{row.activity}</td>
+                              <td className="px-6 py-3 text-white/30 font-bold tracking-widest uppercase text-[10px]">{row.chargeCode || '-'}</td>
+                              <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold tracking-tight">{parseFloat(row.hours || '0').toFixed(2)}</td>
+                              <td className="px-2 py-3">
+                                <button 
+                                  onClick={() => {
+                                    setEditingRows(prev => prev.filter(r => r.id !== row.id));
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ));
+                        } else {
+                          // RAW VIEW (Editable, NO Dropdowns as requested)
+                          return editingRows.map((row, i) => (
+                            <tr key={row.id} className="group hover:bg-white/5 transition-all">
+                              <td className="px-6 py-3">
+                                <span className="text-white/40 font-bold text-[10px] uppercase tracking-wider">{row.day || '-'}</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="text-white/90 font-medium text-xs leading-relaxed block">{row.activity}</span>
+                              </td>
+                              <td className="px-6 py-3">
+                                <select 
+                                  value={row.chargeCode || ''}
+                                  onChange={(e) => {
+                                    const next = [...editingRows];
+                                    next[i].chargeCode = e.target.value;
+                                    setEditingRows(next);
+                                  }}
+                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 flex-1 text-[10px] text-white outline-none focus:border-indigo-500/50 w-full transition-all uppercase tracking-widest font-bold appearance-none min-w-[120px]"
+                                >
+                                  <option value="" className="bg-slate-900">Code...</option>
+                                  {savedChargeCodes.map(code => (
+                                    <option key={code} value={code} className="bg-slate-900">{code}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-6 py-3 text-right">
+                                <span className="text-indigo-400 font-mono font-bold text-right tracking-tight">{parseFloat(row.hours || '0').toFixed(2)}</span>
+                              </td>
+                              <td className="px-2 py-3">
+                                <button 
+                                  onClick={() => {
+                                    setEditingRows(prev => prev.filter(r => r.id !== row.id));
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ));
+                        }
+                      })()}
                     </tbody>
                   </table>
                 </div>
-
                 {/* Suggested Tasks SECTION in Modal */}
                 {viewingTimesheet?.suggestedTasks && viewingTimesheet.suggestedTasks.length > 0 && (
                   <div className="mt-12 pt-8 border-t border-white/10">
@@ -2418,41 +2628,67 @@ export default function Home() {
         </div>
       )}
 
-
       {/* ZEN FOCUS MODE OVERLAY */}
       {isFocusModeActive && (
-        <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center p-6 animate-in fade-in duration-700 font-sans">
-          <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/20 to-transparent pointer-events-none" />
+        <div className="fixed top-0 left-0 w-screen h-[100dvh] z-[9999] bg-slate-900 flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500 font-sans overflow-hidden border-2 border-indigo-500/10 shadow-[inset_0_0_150px_rgba(79,70,229,0.15)] backdrop-blur-3xl">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/40 to-slate-950/90 pointer-events-none" />
           
-          <div className="w-full max-w-3xl flex flex-col items-center text-center gap-12 sm:gap-16 relative z-10">
+          <div className="w-full max-w-3xl flex flex-col items-center text-center gap-12 sm:gap-16 relative z-10 animate-in slide-in-from-bottom-8 duration-700 delay-150">
             {/* Active Task Name */}
-            <div className="flex flex-col items-center gap-4 animate-in slide-in-from-top-8 duration-1000">
-              <span className="text-[10px] uppercase tracking-[0.4em] text-indigo-400 font-black opacity-60">Deep Work Session</span>
+            <div className="flex flex-col items-center gap-4">
+              <span className="text-[10px] md:text-sm uppercase tracking-[0.4em] text-indigo-400 font-black opacity-60">Deep Work Session</span>
               <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight drop-shadow-2xl">
                 {todos.find(t => t.id === focusedTaskId)?.text || "Focusing..."}
               </h1>
             </div>
 
-            {/* Timer component (Re-rendered here) */}
-            <div className="flex flex-col items-center gap-8 animate-in zoom-in-95 duration-1000 delay-300">
+            {/* Timer component */}
+            <div className="flex flex-col items-center gap-8 bg-black/20 p-8 sm:p-12 rounded-[3rem] border border-white/5 backdrop-blur-xl shadow-2xl">
+              
+              {!isRunning && (
+                 <div className="flex items-center gap-6 mb-2 opacity-70">
+                   <button 
+                     onClick={() => {
+                        const nextDuration = Math.max(5, focusDuration - 5);
+                        setFocusDuration(nextDuration);
+                        setTimeLeft(nextDuration * 60);
+                     }}
+                     className="w-12 h-12 rounded-full border-2 border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-all font-mono font-bold active:scale-95 shadow-xl"
+                   >
+                     - 5
+                   </button>
+                   <span className="text-white/40 uppercase tracking-widest text-xs font-bold font-mono">Adjust Minutes</span>
+                   <button 
+                     onClick={() => {
+                        const nextDuration = Math.min(120, focusDuration + 5);
+                        setFocusDuration(nextDuration);
+                        setTimeLeft(nextDuration * 60);
+                     }}
+                     className="w-12 h-12 rounded-full border-2 border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-all font-mono font-bold active:scale-95 shadow-xl"
+                   >
+                     + 5
+                   </button>
+                 </div>
+              )}
+
               <div 
-                className={`text-8xl sm:text-9xl md:text-[12rem] font-mono font-extralight tracking-widest transition-all duration-500 ${getTimerColorClass()}`}
+                className={`text-8xl sm:text-9xl md:text-[13rem] font-mono font-medium tracking-wide transition-all duration-500 leading-none py-4 ${getTimerColorClass()}`}
               >
                 {formatTime(timeLeft)}
               </div>
 
               {/* Controls */}
-              <div className="flex gap-6 sm:gap-8">
+              <div className="flex gap-4 sm:gap-6 mt-4">
                 <button 
                   onClick={toggleTimer}
-                  className={`px-10 py-4 sm:px-14 sm:py-5 rounded-full transition-all text-sm sm:text-base uppercase tracking-widest font-black flex items-center gap-3 shadow-2xl ${isRunning ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-indigo-600 text-white hover:bg-indigo-500 scale-105 active:scale-95'}`}
+                  className={`px-10 py-5 sm:px-14 sm:py-6 rounded-full transition-all text-sm sm:text-lg uppercase tracking-[0.2em] font-black flex items-center gap-4 shadow-2xl ${isRunning ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-indigo-500 text-white hover:bg-indigo-400 scale-105 active:scale-95 shadow-indigo-500/20'}`}
                 >
-                  {isRunning ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
+                  {isRunning ? <Pause className="h-6 w-6 stroke-[3]" /> : <Play className="h-6 w-6 stroke-[3] ml-1" />}
                   {isRunning ? 'Pause' : 'Start'}
                 </button>
                 <button 
                   onClick={resetTimer}
-                  className="px-10 py-4 sm:px-14 sm:py-5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all text-sm sm:text-base uppercase tracking-wider font-bold"
+                  className="px-10 py-5 sm:px-14 sm:py-6 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all text-sm sm:text-lg uppercase tracking-[0.2em] font-black"
                 >
                   Reset
                 </button>
@@ -2460,11 +2696,12 @@ export default function Home() {
             </div>
 
             {/* End Focus Logic */}
-            <div className="mt-12 animate-in fade-in duration-1000 delay-700">
+            <div className="mt-8">
               <button 
                 onClick={() => setIsFocusModeActive(false)}
-                className="px-8 py-3 rounded-xl bg-white/5 text-white/30 hover:text-white hover:bg-white/10 transition-all text-xs uppercase font-bold tracking-widest border border-white/5"
+                className="px-8 py-4 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-all text-xs sm:text-sm uppercase font-black tracking-[0.2em] group flex items-center gap-2"
               >
+                <ArrowLeft className="h-4 w-4 opacity-0 -ml-6 group-hover:opacity-100 group-hover:ml-0 transition-all" />
                 Minimize Focus Mode
               </button>
             </div>

@@ -1,0 +1,31 @@
+
+> focus@0.1.0 lint
+> eslint
+
+
+C:\cursor\playground test\focus\Focus\app\page.tsx
+     5:98  warning  'Download' is defined but never used                                                                                                               @typescript-eslint/no-unused-vars
+    69:7   warning  'DEFAULT_HABITS' is assigned a value but never used                                                                                                @typescript-eslint/no-unused-vars
+   108:10  warning  'isHovered' is assigned a value but never used                                                                                                     @typescript-eslint/no-unused-vars
+   108:21  warning  'setIsHovered' is assigned a value but never used                                                                                                  @typescript-eslint/no-unused-vars
+   113:26  warning  'setEditInputValue' is assigned a value but never used                                                                                             @typescript-eslint/no-unused-vars
+   129:10  warning  'dragOverTodoIndex' is assigned a value but never used                                                                                             @typescript-eslint/no-unused-vars
+   172:10  warning  'completion' is assigned a value but never used                                                                                                    @typescript-eslint/no-unused-vars
+   504:9   warning  'handleDownloadCSV' is assigned a value but never used                                                                                             @typescript-eslint/no-unused-vars
+   626:16  warning  'e' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   649:16  warning  'e' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   656:16  warning  'e' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   690:16  warning  'e' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   703:16  warning  'e' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   712:16  warning  'e' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   730:6   warning  React Hook useEffect has a missing dependency: 'editingRows'. Either include it or remove the dependency array                                     react-hooks/exhaustive-deps
+   810:14  warning  'e' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   932:16  warning  'e' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   935:6   warning  React Hook useEffect has missing dependencies: 'activeTaskId', 'requestWakeLock', and 'todos'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  1160:9   warning  'handleDragStart' is assigned a value but never used                                                                                               @typescript-eslint/no-unused-vars
+  1170:9   warning  'handleDragOver' is assigned a value but never used                                                                                                @typescript-eslint/no-unused-vars
+  1175:9   warning  'handleDrop' is assigned a value but never used                                                                                                    @typescript-eslint/no-unused-vars
+  1204:9   warning  'handleDragEnd' is assigned a value but never used                                                                                                 @typescript-eslint/no-unused-vars
+
+✖ 22 problems (0 errors, 22 warnings)
+
