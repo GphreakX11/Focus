@@ -1247,25 +1247,13 @@ export default function Home() {
             {/* Action Zone (Left) - Unified Single Source of Truth */}
             <div className="w-12 flex items-center justify-center shrink-0">
               <div className="w-10 h-10 flex items-center justify-center">
-                {todoView === 'backburner' ? (
-                  <button 
-                    onClick={() => {
-                      setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
-                    }}
-                    className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-90 transition-all"
-                    title="Reactivate Task"
-                  >
-                    <ArrowLeft className="h-6 w-6" />
-                  </button>
-                ) : (
-                  <input
-                    type="checkbox"
-                    checked={todo.completed}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => handleToggleTodo(todo.id)}
-                    className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
-                  />
-                )}
+                <input
+                  type="checkbox"
+                  checked={todo.completed}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => handleToggleTodo(todo.id)}
+                  className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                />
               </div>
             </div>
 
@@ -2430,6 +2418,7 @@ export default function Home() {
                       <tr>
                         {timecardViewMode === 'daily' ? (
                           <>
+                            <th className="px-6 py-4 font-black">Activity Description</th>
                             <th className="px-6 py-4 font-black">Combined Charge Code</th>
                             <th className="px-6 py-4 font-black text-right">Total Hours</th>
                           </>
@@ -2465,6 +2454,7 @@ export default function Home() {
                             <>
                               {codeEntries.map(([code, hours]) => (
                                 <tr key={code} className="hover:bg-white/5 transition-all">
+                                  <td className="px-6 py-4 font-medium text-white/50 italic text-xs">Grouped Activities</td>
                                   <td className="px-6 py-4 font-bold text-white tracking-widest uppercase text-xs">{code}</td>
                                   <td className="px-6 py-4 text-right text-indigo-400 font-mono font-black text-lg">{hours.toFixed(2)}</td>
                                 </tr>
@@ -2472,17 +2462,17 @@ export default function Home() {
                               
                               <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
                                 <td className="px-6 py-4">
-                                  <div className="flex flex-col">
-                                    <span className="font-black text-indigo-300 tracking-widest uppercase text-xs">8100|IN-HOUSE TRAINING-09718100 (ADMIN)</span>
-                                    <span className="text-[10px] text-indigo-300/40 font-bold italic">Auto-calculated to reach 8.0h</span>
-                                  </div>
+                                  <span className="font-medium text-indigo-300/50 italic text-xs">Daily Admin (Auto-Calculated)</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="font-black text-indigo-300 tracking-widest uppercase text-[10px]">8100|IN-HOUSE TRAINING-09718100</span>
                                 </td>
                                 <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
                               </tr>
                               
                               {dayRows.length === 0 && (
                                 <tr>
-                                  <td colSpan={2} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
+                                  <td colSpan={3} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
                                 </tr>
                               )}
                             </>
@@ -2636,44 +2626,43 @@ export default function Home() {
         </div>
       )}
 
-
       {/* ZEN FOCUS MODE OVERLAY */}
       {isFocusModeActive && (
-        <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center p-6 animate-in fade-in duration-700 font-sans">
-          <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/20 to-transparent pointer-events-none" />
+        <div className="fixed top-0 left-0 w-screen h-[100dvh] z-[9999] bg-slate-900 flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500 font-sans overflow-hidden border-2 border-indigo-500/10 shadow-[inset_0_0_150px_rgba(79,70,229,0.15)] backdrop-blur-3xl">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/40 to-slate-950/90 pointer-events-none" />
           
-          <div className="w-full max-w-3xl flex flex-col items-center text-center gap-12 sm:gap-16 relative z-10">
+          <div className="w-full max-w-3xl flex flex-col items-center text-center gap-12 sm:gap-16 relative z-10 animate-in slide-in-from-bottom-8 duration-700 delay-150">
             {/* Active Task Name */}
-            <div className="flex flex-col items-center gap-4 animate-in slide-in-from-top-8 duration-1000">
-              <span className="text-[10px] uppercase tracking-[0.4em] text-indigo-400 font-black opacity-60">Deep Work Session</span>
+            <div className="flex flex-col items-center gap-4">
+              <span className="text-[10px] md:text-sm uppercase tracking-[0.4em] text-indigo-400 font-black opacity-60">Deep Work Session</span>
               <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight drop-shadow-2xl">
                 {todos.find(t => t.id === focusedTaskId)?.text || "Focusing..."}
               </h1>
             </div>
 
-            {/* Timer component (Re-rendered here) */}
-            <div className="flex flex-col items-center gap-8 animate-in zoom-in-95 duration-1000 delay-300">
+            {/* Timer component */}
+            <div className="flex flex-col items-center gap-8 bg-black/20 p-8 sm:p-12 rounded-[3rem] border border-white/5 backdrop-blur-xl shadow-2xl">
               
               {!isRunning && (
-                 <div className="flex items-center gap-6 mt-4 opacity-70">
+                 <div className="flex items-center gap-6 mb-2 opacity-70">
                    <button 
                      onClick={() => {
                         const nextDuration = Math.max(5, focusDuration - 5);
                         setFocusDuration(nextDuration);
                         setTimeLeft(nextDuration * 60);
                      }}
-                     className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white transition-all text-xl font-bold font-mono"
+                     className="w-12 h-12 rounded-full border-2 border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-all font-mono font-bold active:scale-95 shadow-xl"
                    >
                      - 5
                    </button>
-                   <span className="text-white/40 uppercase tracking-widest text-xs font-bold w-20 text-center">Adjust</span>
+                   <span className="text-white/40 uppercase tracking-widest text-xs font-bold font-mono">Adjust Minutes</span>
                    <button 
                      onClick={() => {
                         const nextDuration = Math.min(120, focusDuration + 5);
                         setFocusDuration(nextDuration);
                         setTimeLeft(nextDuration * 60);
                      }}
-                     className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white transition-all text-xl font-bold font-mono"
+                     className="w-12 h-12 rounded-full border-2 border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-all font-mono font-bold active:scale-95 shadow-xl"
                    >
                      + 5
                    </button>
@@ -2681,23 +2670,23 @@ export default function Home() {
               )}
 
               <div 
-                className={`text-8xl sm:text-9xl md:text-[12rem] font-mono font-extralight tracking-widest transition-all duration-500 ${getTimerColorClass()}`}
+                className={`text-8xl sm:text-9xl md:text-[13rem] font-mono font-medium tracking-wide transition-all duration-500 leading-none py-4 ${getTimerColorClass()}`}
               >
                 {formatTime(timeLeft)}
               </div>
 
               {/* Controls */}
-              <div className="flex gap-6 sm:gap-8">
+              <div className="flex gap-4 sm:gap-6 mt-4">
                 <button 
                   onClick={toggleTimer}
-                  className={`px-10 py-4 sm:px-14 sm:py-5 rounded-full transition-all text-sm sm:text-base uppercase tracking-widest font-black flex items-center gap-3 shadow-2xl ${isRunning ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-indigo-600 text-white hover:bg-indigo-500 scale-105 active:scale-95'}`}
+                  className={`px-10 py-5 sm:px-14 sm:py-6 rounded-full transition-all text-sm sm:text-lg uppercase tracking-[0.2em] font-black flex items-center gap-4 shadow-2xl ${isRunning ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-indigo-500 text-white hover:bg-indigo-400 scale-105 active:scale-95 shadow-indigo-500/20'}`}
                 >
-                  {isRunning ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
+                  {isRunning ? <Pause className="h-6 w-6 stroke-[3]" /> : <Play className="h-6 w-6 stroke-[3] ml-1" />}
                   {isRunning ? 'Pause' : 'Start'}
                 </button>
                 <button 
                   onClick={resetTimer}
-                  className="px-10 py-4 sm:px-14 sm:py-5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all text-sm sm:text-base uppercase tracking-wider font-bold"
+                  className="px-10 py-5 sm:px-14 sm:py-6 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all text-sm sm:text-lg uppercase tracking-[0.2em] font-black"
                 >
                   Reset
                 </button>
@@ -2705,11 +2694,12 @@ export default function Home() {
             </div>
 
             {/* End Focus Logic */}
-            <div className="mt-12 animate-in fade-in duration-1000 delay-700">
+            <div className="mt-8">
               <button 
                 onClick={() => setIsFocusModeActive(false)}
-                className="px-8 py-3 rounded-xl bg-white/5 text-white/30 hover:text-white hover:bg-white/10 transition-all text-xs uppercase font-bold tracking-widest border border-white/5"
+                className="px-8 py-4 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-all text-xs sm:text-sm uppercase font-black tracking-[0.2em] group flex items-center gap-2"
               >
+                <ArrowLeft className="h-4 w-4 opacity-0 -ml-6 group-hover:opacity-100 group-hover:ml-0 transition-all" />
                 Minimize Focus Mode
               </button>
             </div>
