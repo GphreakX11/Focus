@@ -2448,7 +2448,7 @@ export default function Home() {
                             summaryByCode[code] = (summaryByCode[code] || 0) + h;
                           });
 
-                          const codeEntries = Object.entries(summaryByCode);
+                          const codeEntries = Object.entries(summaryByCode).filter(([code, hours]) => hours > 0);
                           const totalCharged = codeEntries.reduce((a, b) => a + b[1], 0);
                           const adminHours = Math.max(0, 8 - totalCharged);
 
@@ -2462,17 +2462,19 @@ export default function Home() {
                                 </tr>
                               ))}
                               
-                              <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
-                                <td className="px-6 py-4">
-                                  <span className="font-medium text-indigo-300/50 italic text-xs">Daily Admin (Auto-Calculated)</span>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className="font-black text-indigo-300 tracking-widest uppercase text-[10px]">8100|IN-HOUSE TRAINING-09718100</span>
-                                </td>
-                                <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
-                              </tr>
+                              {adminHours > 0 && (
+                                <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
+                                  <td className="px-6 py-4">
+                                    <span className="font-medium text-indigo-300/50 italic text-xs">Daily Admin (Auto-Calculated)</span>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className="font-black text-indigo-300 tracking-widest uppercase text-[10px]">8100|IN-HOUSE TRAINING-09718100</span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
+                                </tr>
+                              )}
                               
-                              {dayRows.length === 0 && (
+                              {codeEntries.length === 0 && adminHours === 0 && (
                                 <tr>
                                   <td colSpan={3} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
                                 </tr>
@@ -2503,7 +2505,7 @@ export default function Home() {
                           ));
                         } else {
                           // RAW VIEW (Editable, NO Dropdowns as requested)
-                          return editingRows.map((row, i) => (
+                          let rawRows = editingRows.map((row, i) => (
                             <tr key={row.id} className="group hover:bg-white/5 transition-all">
                               <td className="px-6 py-3">
                                 <span className="text-white/40 font-bold text-[10px] uppercase tracking-wider">{row.day || '-'}</span>
@@ -2528,20 +2530,31 @@ export default function Home() {
                                 </select>
                               </td>
                               <td className="px-6 py-3 text-right">
-                                <span className="text-indigo-400 font-mono font-bold text-right tracking-tight">{parseFloat(row.hours || '0').toFixed(2)}</span>
+                                <input 
+                                  type="number"
+                                  step="0.25"
+                                  value={row.hours}
+                                  onChange={(e) => {
+                                    const next = [...editingRows];
+                                    next[i].hours = e.target.value;
+                                    setEditingRows(next);
+                                  }}
+                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 w-20 text-indigo-400 font-mono font-bold text-right tracking-tight outline-none focus:border-indigo-500/50 transition-all"
+                                />
                               </td>
                               <td className="px-2 py-3">
                                 <button 
                                   onClick={() => {
                                     setEditingRows(prev => prev.filter(r => r.id !== row.id));
                                   }}
-                                  className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                                  className="opacity-100 p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
                               </td>
                             </tr>
                           ));
+                          return <>{rawRows}</>;
                         }
                       })()}
                     </tbody>
