@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus, ArrowLeft } from 'lucide-react';
+import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus, ArrowLeft, Target, Play, Pause } from 'lucide-react';
 
 import { analyzeCalendar } from './calendar-actions';
 
@@ -36,6 +36,23 @@ type TimesheetHistory = {
   markdown: string;
   suggestedTasks?: { task_name: string; related_meeting: string }[];
 };
+
+type TimecardRow = {
+  day?: string;
+  activity: string;
+  hours: string;
+  chargeCode: string;
+  isHeader?: boolean;
+  isSeparator?: boolean;
+  id: string;
+};
+
+interface WakeLockSentinel extends EventTarget {
+  readonly released: boolean;
+  readonly type: "screen";
+  release(): Promise<void>;
+  onrelease: ((this: WakeLockSentinel, ev: Event) => any) | null;
+}
 
 const DEFAULT_HABITS: Habit[] = [];
 
@@ -100,6 +117,10 @@ export default function Home() {
   const [productivityPoints, setProductivityPoints] = useState(0);
   const [dailyPointsHistory, setDailyPointsHistory] = useState({} as Record<string, number>);
 
+  // Zen Focus Mode State
+  const [isFocusModeActive, setIsFocusModeActive] = useState(false);
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+
 
   // AI Meeting Assistant State
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
@@ -140,7 +161,7 @@ export default function Home() {
   const [calendarHistory, setCalendarHistory] = useState<TimesheetHistory[]>([]);
   const [viewingTimesheet, setViewingTimesheet] = useState<TimesheetHistory | null>(null);
   const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(new Set());
-  const [editingRows, setEditingRows] = useState<{ day?: string; activity: string; hours: string; chargeCode: string; isHeader?: boolean; isSeparator?: boolean; id: string }[]>([]);
+  const [editingRows, setEditingRows] = useState<TimecardRow[]>([]);
   const [savedChargeCodes, setSavedChargeCodes] = useState([] as string[]);
   const [isTimecardView, setIsTimecardView] = useState(false);
 
@@ -208,7 +229,7 @@ export default function Home() {
 
         .filter(r => r !== null);
       
-      setEditingRows(rows as any);
+      setEditingRows(rows as TimecardRow[]);
       setIsAiDrawerOpen(false);
     } else {
       setEditingRows([]);
@@ -314,9 +335,10 @@ export default function Home() {
         setSelectedItemsToImport(new Set(items.map((_, i) => i)));
         setIsImportModalOpen(true);
       }
-    } catch (err: any) {
-      console.error('AI Completion Error:', err);
-      alert(`AI Error: ${err.message || 'Unknown error'}`);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('AI Completion Error:', error);
+      alert(`AI Error: ${error.message || 'Unknown error'}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -401,10 +423,11 @@ export default function Home() {
       } else {
         throw new Error(response.error || "Failed to process calendar.");
       }
-    } catch (err: any) {
-      console.error("Calendar Analysis Error:", err);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Calendar Analysis Error:", error);
       // Surface the actual error message to the UI
-      setCalendarError(err.message || String(err));
+      setCalendarError(error.message || String(error));
     } finally {
       setIsAnalyzingCalendar(false);
       isCalendarProcessingRef.current = false;
@@ -493,7 +516,7 @@ export default function Home() {
 
   // Standby / Media Session State
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [wakeLock, setWakeLock] = useState<any>(null);
+  const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -708,7 +731,7 @@ export default function Home() {
   // Audio Cue (Zen Chime using Web Audio API)
   const playChime = useCallback(() => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContext = (window.AudioContext || (window as any).webkitAudioContext) as typeof window.AudioContext;
       const ctx = new AudioContext();
       
       const osc = ctx.createOscillator();
@@ -825,7 +848,7 @@ export default function Home() {
         const audio = audioRef.current;
         if (audio) audio.pause();
         if (wakeLock) {
-          (wakeLock as any).release().then(() => setWakeLock(null)).catch(() => setWakeLock(null));
+          wakeLock.release().then(() => setWakeLock(null)).catch(() => setWakeLock(null));
         }
         
         if (timeLeft === 0 && isRunning) {
@@ -1242,6 +1265,21 @@ export default function Home() {
             {todo.important && selectedTodoId !== todo.id && activeTaskId !== todo.id && (
               <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
             )}
+            {todoView === 'active' && !todo.completed && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveTaskId(todo.id);
+                  setFocusedTaskId(todo.id);
+                  setIsFocusModeActive(true);
+                  if (!isRunning) setIsRunning(true);
+                }}
+                className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-400/10 active:scale-90 transition-all shrink-0"
+                title="Zen Focus Mode"
+              >
+                <Target className="h-5 w-5 stroke-[2.5]" />
+              </button>
+            )}
             {/* Tap target — opens action bar without requiring a full-row press */}
             <button
               onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
@@ -1587,176 +1625,96 @@ export default function Home() {
 
       </div>
 
-      {/* Sticky Header Layer - Increased Z-index to stay on top */}
-      <div className="sticky top-0 z-[60] w-full flex flex-col items-center gap-4 bg-transparent pb-4" style={{ paddingTop: 'var(--safe-top)' }}>
-        {/* Top Timer Card - COMPLETELY TRANSPARENT */}
-        <div className="w-full max-w-xl p-4 sm:p-6 flex flex-col items-center justify-center relative group">
-          {/* Pomodoro Timer */}
-          <div className="flex flex-col items-center transition-opacity duration-300 opacity-100">
-            <div 
-              className={`text-6xl sm:text-8xl md:text-9xl font-mono font-light tracking-widest transition-all duration-500 ${getTimerColorClass()} ${!isRunning && !isAllDone ? 'cursor-pointer hover:text-white' : ''}`}
-              onClick={() => {
-                if (!isRunning && !isEditingTime) {
-                  setIsEditingTime(true);
-                  setEditInputValue(Math.floor(timeLeft / 60).toString());
-                }
-              }}
-              title={!isRunning ? "Click to edit minutes" : ""}
+      {/* Sticky Header Layer - RECLAIMED REAL ESTATE: Productivity Points instead of Timer */}
+      {!isFocusModeActive && (
+        <div className="sticky top-0 z-[60] w-full flex flex-col items-center gap-4 bg-transparent pb-4 px-4" style={{ paddingTop: 'var(--safe-top)' }}>
+          <div className="w-full max-w-xl p-4 sm:p-6 flex flex-col items-center justify-center relative group animate-in fade-in slide-in-from-top-4 duration-700">
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-lg w-full">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/20 rounded-xl">
+                  <Sparkles className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
+                  <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
+                <div className="flex items-center gap-2 justify-end">
+                  <div className="text-sm font-bold text-emerald-400">
+                    Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
+                  </div>
+                  {(() => {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yesterdayStr = yesterday.toLocaleDateString('en-CA');
+                    const yesterdayScore = dailyPointsHistory[yesterdayStr] || 0;
+                    const diff = productivityPoints - yesterdayScore;
+                    if (diff > 0) return <span className="text-[10px] font-bold text-emerald-400 px-1.5 py-0.5 bg-emerald-400/10 rounded-md">+{diff} vs Yesterday</span>;
+                    if (diff < 0) return <span className="text-[10px] font-bold text-red-400 px-1.5 py-0.5 bg-red-400/10 rounded-md">{diff} vs Yesterday</span>;
+                    return <span className="text-[10px] font-bold text-white/20 px-1.5 py-0.5 bg-white/5 rounded-md">Steady</span>;
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isFocusModeActive && (
+        <>
+          {/* HERO CARD: Task Input */}
+          <div className="w-full max-w-2xl rounded-3xl bg-white/5 backdrop-blur-3xl border border-indigo-400/20 shadow-[0_8px_40px_0_rgba(99,102,241,0.15)] px-6 py-6 sm:px-10 flex flex-col items-center relative overflow-hidden mt-6">
+            <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none rounded-3xl" />
+            <form onSubmit={(e) => { e.preventDefault(); handleAddTodo(); }} className="w-full relative">
+              <input 
+                type="text" 
+                value={newTodoText}
+                onChange={(e) => setNewTodoText(e.target.value)}
+                onBlur={handleAddTodo}
+                enterKeyHint="done"
+                placeholder={todoView === 'backburner' ? "What do you kinda need to do?" : "What do you need to do today?"} 
+                className="w-full bg-transparent border-none outline-none text-2xl sm:text-4xl font-sans font-bold text-white placeholder:text-white/30 text-center tracking-tight transition-all duration-300"
+              />
+            </form>
+          </div>
+
+          {/* Tab Switcher: Today / Active / Backburner */}
+          <div className="w-full max-w-2xl px-2 flex justify-between gap-2 mt-4 flex-wrap sm:flex-nowrap">
+            <button
+              onClick={() => setTodoView('today')}
+              className={`flex-1 min-w-[30%] px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all ${
+                todoView === 'today'
+                  ? 'bg-indigo-500/40 text-white border border-indigo-400/50 shadow-lg scale-[1.02]'
+                  : 'bg-white/5 text-white/30 hover:text-white/50 border border-white/5'
+              }`}
             >
-              {isEditingTime ? (
-                <div className="flex items-center justify-center">
-                  <input 
-                    type="number"
-                    value={editInputValue}
-                    onChange={(e) => setEditInputValue(e.target.value)}
-                    onBlur={handleTimeSubmit}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleTimeSubmit();
-                      if (e.key === 'Escape') {
-                        setIsEditingTime(false);
-                        setEditInputValue(""); // revert
-                      }
-                    }}
-                    className="bg-transparent border-b-2 border-white/30 text-right text-white outline-none w-20 sm:w-28 focus:border-white transition-all [-moz-appearance:_textfield] [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none"
-                    autoFocus
-                    min={1}
-                    max={120}
-                  />
-                  <span className="ml-[0.1em]">:</span>
-                  <span>{(timeLeft % 60).toString().padStart(2, '0')}</span>
-                </div>
-              ) : (
-                formatTime(timeLeft)
-              )}
-            </div>
-            <div className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2 transition-colors h-4">
-              {timerMode === 'break' ? 'Break Time' : 'Focus Time'}
-            </div>
-
-            {/* Active Task Indicator with Pressure */}
-            {timerMode === 'focus' && isRunning ? (
-              <div className="flex flex-col items-center mb-8 sm:mb-10 min-h-[3rem] justify-center text-center relative group/objective w-full max-w-xs">
-                {activeTaskId && (
-                  <button 
-                    onClick={() => setActiveTaskId(null)}
-                    className="absolute -right-4 top-0 p-1 opacity-0 group-hover/objective:opacity-40 hover:!opacity-100 transition-all text-white/50"
-                    title="Clear objective"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                )}
-                <span className="text-[10px] uppercase tracking-[0.3em] text-indigo-400 font-bold mb-1 opacity-70">Current Objective</span>
-                <span className="text-lg sm:text-2xl font-sans font-bold text-white tracking-tight drop-shadow-[0_4px_12px_rgba(255,255,255,0.2)] animate-pulse">
-                  {todos.find(t => t.id === activeTaskId)?.text || "Choose a task to crush"}
-                </span>
-              </div>
-            ) : (
-              <div className="mb-8 sm:mb-10 h-[3rem]" />
-            )}
-            
-            <div className="flex gap-4 sm:gap-6">
-              <button 
-                onClick={toggleTimer}
-                className="px-8 py-3 sm:px-10 sm:py-4 rounded-full border border-white/20 text-white/70 hover:text-white hover:bg-white/10 hover:scale-105 active:scale-95 transition-all text-sm sm:text-base uppercase tracking-wider font-semibold"
-              >
-                {isRunning ? 'Pause' : 'Start'}
-              </button>
-              <button 
-                onClick={resetTimer}
-                className="px-8 py-3 sm:px-10 sm:py-4 rounded-full border border-white/20 text-white/70 hover:text-white hover:bg-white/10 hover:scale-105 active:scale-95 transition-all text-sm sm:text-base uppercase tracking-wider font-semibold"
-              >
-                Reset
-              </button>
-            </div>
+              TODAY
+            </button>
+            <button
+              onClick={() => setTodoView('active')}
+              className={`flex-1 min-w-[30%] px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all ${
+                todoView === 'active'
+                  ? 'bg-indigo-500/80 text-white border border-indigo-400 shadow-lg scale-[1.02]'
+                  : 'bg-white/5 text-white/30 hover:text-white/50 border border-white/5'
+              }`}
+            >
+              ACTIVE {todos.filter(t => !t.backburner && t.activeTab).length > 0 && `(${todos.filter(t => !t.backburner && t.activeTab).length})`}
+            </button>
+            <button
+              onClick={() => setTodoView('backburner')}
+              className={`flex-1 min-w-[30%] px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all ${
+                todoView === 'backburner'
+                  ? 'bg-orange-500/40 text-white border border-orange-400/50 shadow-lg scale-[1.02]'
+                  : 'bg-white/5 text-white/30 hover:text-white/50 border border-white/5'
+              }`}
+            >
+              BACKBURNER {todos.filter(t => t.backburner).length > 0 && `(${todos.filter(t => t.backburner).length})`}
+            </button>
           </div>
-        </div>
-
-
-        {/* Productivity Points Dashboard */}
-        <div className="w-full max-w-xl mb-4 animate-in fade-in slide-in-from-top-4 duration-700">
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-500/20 rounded-xl">
-                <Sparkles className="h-5 w-5 text-amber-400" />
-              </div>
-              <div>
-                <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
-                <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
-              <div className="flex items-center gap-2 justify-end">
-                <div className="text-sm font-bold text-emerald-400">
-                  Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
-                </div>
-                {(() => {
-                  const yesterday = new Date();
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  const yesterdayStr = yesterday.toLocaleDateString('en-CA');
-                  const yesterdayScore = dailyPointsHistory[yesterdayStr] || 0;
-                  const diff = productivityPoints - yesterdayScore;
-                  if (diff > 0) return <span className="text-[10px] font-bold text-emerald-400 px-1.5 py-0.5 bg-emerald-400/10 rounded-md">+{diff} vs Yesterday</span>;
-                  if (diff < 0) return <span className="text-[10px] font-bold text-red-400 px-1.5 py-0.5 bg-red-400/10 rounded-md">{diff} vs Yesterday</span>;
-                  return <span className="text-[10px] font-bold text-white/20 px-1.5 py-0.5 bg-white/5 rounded-md">Dynamic</span>;
-                })()}
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-        {/* HERO CARD: Task Input */}
-        <div className="w-full max-w-2xl rounded-3xl bg-white/5 backdrop-blur-3xl border border-indigo-400/20 shadow-[0_8px_40px_0_rgba(99,102,241,0.15)] px-6 py-6 sm:px-10 flex flex-col items-center relative overflow-hidden">
-          {/* subtle gradient glow */}
-          <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none rounded-3xl" />
-          <form onSubmit={(e) => { e.preventDefault(); handleAddTodo(); }} className="w-full relative">
-            <input 
-              type="text" 
-              value={newTodoText}
-              onChange={(e) => setNewTodoText(e.target.value)}
-              onBlur={handleAddTodo}
-              enterKeyHint="done"
-              placeholder={todoView === 'backburner' ? "What do you kinda need to do?" : "What do you need to do today?"} 
-              className="w-full bg-transparent border-none outline-none text-2xl sm:text-4xl font-sans font-bold text-white placeholder:text-white/30 text-center tracking-tight transition-all duration-300"
-            />
-          </form>
-        </div>
-
-        {/* Tab Switcher: Today / Backburner (Now Sticky too!) */}
-        <div className="w-full max-w-2xl px-2 flex justify-between gap-2 mt-2 flex-wrap sm:flex-nowrap">
-          <button
-            onClick={() => setTodoView('today')}
-            className={`flex-1 min-w-[30%] px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all ${
-              todoView === 'today'
-                ? 'bg-indigo-500/40 text-white border border-indigo-400/50 shadow-lg scale-[1.02]'
-                : 'bg-white/5 text-white/30 hover:text-white/50 border border-white/5'
-            }`}
-          >
-            TODAY
-          </button>
-          <button
-            onClick={() => setTodoView('active')}
-            className={`flex-1 min-w-[30%] px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all ${
-              todoView === 'active'
-                ? 'bg-indigo-500/80 text-white border border-indigo-400 shadow-lg scale-[1.02]'
-                : 'bg-white/5 text-white/30 hover:text-white/50 border border-white/5'
-            }`}
-          >
-            ACTIVE {todos.filter(t => !t.backburner && t.activeTab).length > 0 && `(${todos.filter(t => !t.backburner && t.activeTab).length})`}
-          </button>
-          <button
-            onClick={() => setTodoView('backburner')}
-            className={`flex-1 min-w-[30%] px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all ${
-              todoView === 'backburner'
-                ? 'bg-orange-500/40 text-white border border-orange-400/50 shadow-lg scale-[1.02]'
-                : 'bg-white/5 text-white/30 hover:text-white/50 border border-white/5'
-            }`}
-          >
-            BACKBURNER {todos.filter(t => t.backburner).length > 0 && `(${todos.filter(t => t.backburner).length})`}
-          </button>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* Scrollable To-Do List Content */}
       <div className={`w-full max-w-2xl flex flex-col items-center transition-all duration-500 relative ${selectedTodoId ? 'z-[55]' : 'z-10'} ${isAllDone ? 'opacity-50' : 'opacity-100'}`}>
@@ -2409,7 +2367,7 @@ export default function Home() {
                               onClick={() => {
                                 const updated = { ...viewingTimesheet };
                                 updated.suggestedTasks = updated.suggestedTasks?.filter((_, i) => i !== idx);
-                                setViewingTimesheet(updated as any);
+                                setViewingTimesheet(updated as TimesheetHistory);
                               }}
                               className="p-2 text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
                             >
@@ -2454,6 +2412,60 @@ export default function Home() {
                   <span className="text-base font-black tracking-tight">{copiedIndex ? 'Copied Details!' : 'Export Dataset'}</span>
                   <span className="text-xs text-indigo-200 font-medium opacity-70 italic">Ready for Excel / Sheets</span>
                 </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* ZEN FOCUS MODE OVERLAY */}
+      {isFocusModeActive && (
+        <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center p-6 animate-in fade-in duration-700 font-sans">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/20 to-transparent pointer-events-none" />
+          
+          <div className="w-full max-w-3xl flex flex-col items-center text-center gap-12 sm:gap-16 relative z-10">
+            {/* Active Task Name */}
+            <div className="flex flex-col items-center gap-4 animate-in slide-in-from-top-8 duration-1000">
+              <span className="text-[10px] uppercase tracking-[0.4em] text-indigo-400 font-black opacity-60">Deep Work Session</span>
+              <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight drop-shadow-2xl">
+                {todos.find(t => t.id === focusedTaskId)?.text || "Focusing..."}
+              </h1>
+            </div>
+
+            {/* Timer component (Re-rendered here) */}
+            <div className="flex flex-col items-center gap-8 animate-in zoom-in-95 duration-1000 delay-300">
+              <div 
+                className={`text-8xl sm:text-9xl md:text-[12rem] font-mono font-extralight tracking-widest transition-all duration-500 ${getTimerColorClass()}`}
+              >
+                {formatTime(timeLeft)}
+              </div>
+
+              {/* Controls */}
+              <div className="flex gap-6 sm:gap-8">
+                <button 
+                  onClick={toggleTimer}
+                  className={`px-10 py-4 sm:px-14 sm:py-5 rounded-full transition-all text-sm sm:text-base uppercase tracking-widest font-black flex items-center gap-3 shadow-2xl ${isRunning ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-indigo-600 text-white hover:bg-indigo-500 scale-105 active:scale-95'}`}
+                >
+                  {isRunning ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
+                  {isRunning ? 'Pause' : 'Start'}
+                </button>
+                <button 
+                  onClick={resetTimer}
+                  className="px-10 py-4 sm:px-14 sm:py-5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all text-sm sm:text-base uppercase tracking-wider font-bold"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            {/* End Focus Logic */}
+            <div className="mt-12 animate-in fade-in duration-1000 delay-700">
+              <button 
+                onClick={() => setIsFocusModeActive(false)}
+                className="px-8 py-3 rounded-xl bg-white/5 text-white/30 hover:text-white hover:bg-white/10 transition-all text-xs uppercase font-bold tracking-widest border border-white/5"
+              >
+                Minimize Focus Mode
               </button>
             </div>
           </div>
