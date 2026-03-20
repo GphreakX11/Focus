@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus, ArrowLeft, Target, Play, Pause } from 'lucide-react';
+import { Sparkles, X, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Copy, Download, Plus, ArrowLeft, Target, Play, Pause } from 'lucide-react';
 
 // Dynamic Recharts Imports for SSR safety
 const ComposedChart = dynamic(() => import('recharts').then(mod => mod.ComposedChart), { ssr: false });
