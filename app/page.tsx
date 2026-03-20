@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus } from 'lucide-react';
+import { Sparkles, X, Send, History, User, FileText, Upload, Trash2, Check, RotateCcw, Calendar, Camera, Copy, Download, Plus, ArrowLeft } from 'lucide-react';
+
 import { analyzeCalendar } from './calendar-actions';
 
 type Habit = {
@@ -95,6 +96,11 @@ export default function Home() {
   const [selectedTodoId, setSelectedTodoId] = useState(null as string | null);
   const [activeTaskId, setActiveTaskId] = useState(null as string | null);
 
+  // Gamification State
+  const [productivityPoints, setProductivityPoints] = useState(0);
+  const [dailyPointsHistory, setDailyPointsHistory] = useState({} as Record<string, number>);
+
+
   // AI Meeting Assistant State
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [userName, setUserName] = useState('');
@@ -104,8 +110,23 @@ export default function Home() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedItemsToImport, setSelectedItemsToImport] = useState(new Set() as Set<number>);
   const [viewingAnalysis, setViewingAnalysis] = useState<AnalysisHistory | null>(null);
-  
+
+  const updatePoints = (amount: number) => {
+    const today = getTodayStr();
+    setProductivityPoints(prev => {
+      const newPoints = prev + amount;
+      setDailyPointsHistory(h => {
+        const next = { ...h, [today]: newPoints };
+        localStorage.setItem('focus-points-history', JSON.stringify(next));
+        return next;
+      });
+      return newPoints;
+    });
+  };
+
+
   const [completion, setCompletion] = useState('');
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Calendar Analyzer State
@@ -119,7 +140,10 @@ export default function Home() {
   const [calendarHistory, setCalendarHistory] = useState<TimesheetHistory[]>([]);
   const [viewingTimesheet, setViewingTimesheet] = useState<TimesheetHistory | null>(null);
   const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(new Set());
-  const [editingRows, setEditingRows] = useState<{ day?: string; activity: string; hours: string; isHeader?: boolean; isSeparator?: boolean; id: string }[]>([]);
+  const [editingRows, setEditingRows] = useState<{ day?: string; activity: string; hours: string; chargeCode: string; isHeader?: boolean; isSeparator?: boolean; id: string }[]>([]);
+  const [savedChargeCodes, setSavedChargeCodes] = useState([] as string[]);
+  const [isTimecardView, setIsTimecardView] = useState(false);
+
 
   const saveToCalendarHistory = (markdown: string, tasks?: { task_name: string, related_meeting: string }[]) => {
     const newEntry: TimesheetHistory = {
@@ -177,9 +201,11 @@ export default function Home() {
             id: `row-${idx}-${Date.now()}`,
             day: day || lastDay,
             activity,
-            hours: hours || '0.00'
+            hours: hours || '0.00',
+            chargeCode: ''
           };
         })
+
         .filter(r => r !== null);
       
       setEditingRows(rows as any);
@@ -588,7 +614,28 @@ export default function Home() {
       setBreakDuration(parseInt(savedBreak, 10));
     }
     
+    // Load Points
+    const savedPointsHistory = localStorage.getItem('focus-points-history');
+    if (savedPointsHistory) {
+      try {
+        const parsed = JSON.parse(savedPointsHistory);
+        setDailyPointsHistory(parsed);
+        const todayStr = getTodayStr(); // Using local variable to be safe
+        setProductivityPoints(parsed[todayStr] || 0);
+      } catch (e) {}
+    }
+
+    // Load Charge Codes
+    const savedCodes = localStorage.getItem('focus-charge-codes');
+    if (savedCodes) {
+      try {
+        setSavedChargeCodes(JSON.parse(savedCodes));
+      } catch (e) {}
+    }
+
     setTimeLeft(initialFocus * 60);
+
+
   }, []);
 
   // Save changes to localStorage
@@ -917,7 +964,10 @@ export default function Home() {
       let newList: Todo[];
       if (isNowCompleted) {
         newList = [...others, { ...toggled, completed: true }];
+        // Add 10 points for completing a task
+        updatePoints(10);
       } else {
+
         const firstCompletedIndex = others.findIndex(t => t.completed);
         const insertIndex = firstCompletedIndex === -1 ? others.length : firstCompletedIndex;
         newList = [
@@ -1098,6 +1148,17 @@ export default function Home() {
           className={`w-full rounded-xl transition-all duration-300 ${selectedTodoId === todo.id ? 'relative z-[45] bg-white/10 shadow-2xl scale-[1.02] py-1 px-2' : ''}`}
         >
           <div className="flex items-center gap-3 w-full py-2">
+            {todoView === 'backburner' && (
+              <button 
+                onClick={() => {
+                  setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
+                }}
+                className="p-1.5 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-95 transition-all shrink-0"
+                title="Reactivate Task"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            )}
             <input
               type="checkbox"
               checked={todo.completed}
@@ -1105,6 +1166,7 @@ export default function Home() {
               onChange={() => handleToggleTodo(todo.id)}
               className="check-input w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 shrink-0"
             />
+
             {editingTodoId === todo.id ? (
                 <div className="flex-1 flex flex-col gap-3">
                   <input
@@ -1445,9 +1507,15 @@ export default function Home() {
                   {/* Radio Style Completed Button */}
                   <button 
                     onClick={() => {
-                      setHabits(prev => prev.map(h => 
-                        h.id === habit.id ? { ...h, completed: !h.completed, lastCompletedDate: getTodayStr() } : h
-                      ));
+                      setHabits(prev => prev.map(h => {
+                        if (h.id === habit.id) {
+                          const isNowCompleted = !h.completed;
+                          if (isNowCompleted) updatePoints(5);
+                          return { ...h, completed: isNowCompleted, lastCompletedDate: getTodayStr() };
+                        }
+                        return h;
+                      }));
+
                     }}
                     className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${habit.completed ? 'bg-indigo-500/40 border-indigo-400' : 'bg-transparent border-white/20 hover:border-white/40'}`}
                   >
@@ -1602,6 +1670,42 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+
+        {/* Productivity Points Dashboard */}
+        <div className="w-full max-w-xl mb-4 animate-in fade-in slide-in-from-top-4 duration-700">
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-500/20 rounded-xl">
+                <Sparkles className="h-5 w-5 text-amber-400" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
+                <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
+              <div className="flex items-center gap-2 justify-end">
+                <div className="text-sm font-bold text-emerald-400">
+                  Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
+                </div>
+                {(() => {
+                  const todayStr = getTodayStr();
+                  const yesterday = new Date();
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  const yesterdayStr = yesterday.toLocaleDateString('en-CA');
+                  const yesterdayScore = dailyPointsHistory[yesterdayStr] || 0;
+                  const diff = productivityPoints - yesterdayScore;
+                  if (diff > 0) return <span className="text-[10px] font-bold text-emerald-400 px-1.5 py-0.5 bg-emerald-400/10 rounded-md">+{diff} vs Yesterday</span>;
+                  if (diff < 0) return <span className="text-[10px] font-bold text-red-400 px-1.5 py-0.5 bg-red-400/10 rounded-md">{diff} vs Yesterday</span>;
+                  return <span className="text-[10px] font-bold text-white/20 px-1.5 py-0.5 bg-white/5 rounded-md">Dynamic</span>;
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+
 
         {/* HERO CARD: Task Input */}
         <div className="w-full max-w-2xl rounded-3xl bg-white/5 backdrop-blur-3xl border border-indigo-400/20 shadow-[0_8px_40px_0_rgba(99,102,241,0.15)] px-6 py-6 sm:px-10 flex flex-col items-center relative overflow-hidden">
@@ -2107,15 +2211,31 @@ export default function Home() {
               <X className="h-6 w-6 stroke-[2.5]" />
             </button>
 
-            <div className="p-8 border-b border-white/10 flex items-center bg-white/5">
+            <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
                   <Calendar className="h-6 w-6" />
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-white tracking-tight leading-tight">Timecard Analysis</h2>
-                  <p className="text-sm text-white/40 font-medium">{viewingTimesheet.date} • Intelligence Extract</p>
+                  <p className="text-sm text-white/40 font-medium">{viewingTimesheet?.date} • Intelligence Extract</p>
                 </div>
+              </div>
+
+              {/* View Toggle */}
+              <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
+                <button 
+                  onClick={() => setIsTimecardView(false)}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${!isTimecardView ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                >
+                  Raw View
+                </button>
+                <button 
+                  onClick={() => setIsTimecardView(true)}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${isTimecardView ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
+                >
+                  Timecard View
+                </button>
               </div>
             </div>
             
@@ -2126,74 +2246,143 @@ export default function Home() {
                       <tr>
                         <th className="px-6 py-4 font-black">Day</th>
                         <th className="px-6 py-4 font-black">Activity Description</th>
+                        <th className="px-6 py-4 font-black">Charge Code</th>
                         <th className="px-6 py-4 font-black text-right">Hours</th>
                         <th className="px-2 py-4 w-10"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {editingRows.map((row, i) => (
-                        <tr key={row.id} className="group hover:bg-white/5 transition-all">
-                          <td className="px-6 py-3">
-                            <input 
-                              type="text"
-                              value={row.day || '-'}
-                              onChange={(e) => {
-                                const next = [...editingRows];
-                                next[i].day = e.target.value;
-                                setEditingRows(next);
-                              }}
-                              className="bg-transparent border-none outline-none text-white/40 font-bold focus:text-indigo-400 w-full transition-colors"
-                            />
-                          </td>
-                          <td className="px-6 py-4">
-                            <textarea 
-                              value={row.activity}
-                              rows={1}
-                              onChange={(e) => {
-                                const next = [...editingRows];
-                                next[i].activity = e.target.value;
-                                setEditingRows(next);
-                                // Auto-resize height logic simple
-                                e.target.style.height = 'auto';
-                                e.target.style.height = e.target.scrollHeight + 'px';
-                              }}
-                              className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all resize-none min-h-[1.5rem] leading-relaxed block overflow-hidden"
-                              onFocus={(e) => {
-                                e.target.style.height = 'auto';
-                                e.target.style.height = e.target.scrollHeight + 'px';
-                              }}
-                            />
-                          </td>
-                          <td className="px-6 py-3 text-right">
-                            <input 
-                              type="text"
-                              value={row.hours}
-                              onChange={(e) => {
-                                const next = [...editingRows];
-                                next[i].hours = e.target.value;
-                                setEditingRows(next);
-                              }}
-                              className="bg-transparent border-none outline-none text-indigo-400 font-mono font-bold text-right w-16 focus:text-white transition-colors"
-                            />
-                          </td>
-                          <td className="px-2 py-3">
-                            <button 
-                              onClick={() => {
-                                setEditingRows(prev => prev.filter((_, idx) => idx !== i));
-                              }}
-                              className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 transition-all"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {isTimecardView ? (
+                        /* Timecard View Rendering */
+                        (() => {
+                          const days = Array.from(new Set(editingRows.filter(r => r.day).map(r => r.day)));
+                          return days.map(day => {
+                            const dayRows = editingRows.filter(r => r.day === day);
+                            const groupedByCode: Record<string, number> = {};
+                            dayRows.forEach(r => {
+                              const code = r.chargeCode || 'Unassigned';
+                              const h = parseFloat(r.hours) || 0;
+                              groupedByCode[code] = (groupedByCode[code] || 0) + h;
+                            });
+                            
+                            const totalCharged = Object.values(groupedByCode).reduce((a, b) => a + b, 0);
+                            const adminHours = Math.max(0, 8 - totalCharged);
+                            
+                            return (
+                              <React.Fragment key={day}>
+                                <tr className="bg-white/[0.02]">
+                                  <td colSpan={5} className="px-6 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400/60 border-b border-white/5">{day}</td>
+                                </tr>
+                                {Object.entries(groupedByCode).map(([code, hours]) => (
+                                  <tr key={code} className="hover:bg-white/5 transition-all">
+                                    <td className="px-6 py-3 text-white/20 font-bold">-</td>
+                                    <td className="px-6 py-4 text-white/60 text-xs italic">Grouped Activities</td>
+                                    <td className="px-6 py-3 font-bold text-white">{code}</td>
+                                    <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold">{hours.toFixed(2)}</td>
+                                    <td className="px-2 py-3"></td>
+                                  </tr>
+                                ))}
+                                {adminHours > 0 && (
+                                  <tr className="bg-indigo-500/5 transition-all">
+                                    <td className="px-6 py-3 text-white/20 font-bold">-</td>
+                                    <td className="px-6 py-4 text-indigo-300/80 text-xs font-bold">Daily Admin (Auto-Calculated)</td>
+                                    <td className="px-6 py-3 font-bold text-indigo-300">ADMIN</td>
+                                    <td className="px-6 py-3 text-right text-indigo-300 font-mono font-bold">{adminHours.toFixed(2)}</td>
+                                    <td className="px-2 py-3"></td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          });
+                        })()
+                      ) : (
+                        editingRows.map((row, i) => (
+                          <tr key={row.id} className="group hover:bg-white/5 transition-all">
+                            <td className="px-6 py-3">
+                              <input 
+                                type="text"
+                                value={row.day || '-'}
+                                onChange={(e) => {
+                                  const next = [...editingRows];
+                                  next[i].day = e.target.value;
+                                  setEditingRows(next);
+                                }}
+                                className="bg-transparent border-none outline-none text-white/40 font-bold focus:text-indigo-400 w-full transition-colors"
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <textarea 
+                                value={row.activity}
+                                rows={1}
+                                onChange={(e) => {
+                                  const next = [...editingRows];
+                                  next[i].activity = e.target.value;
+                                  setEditingRows(next);
+                                  e.target.style.height = 'auto';
+                                  e.target.style.height = e.target.scrollHeight + 'px';
+                                }}
+                                className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all resize-none min-h-[1.5rem] leading-relaxed block overflow-hidden"
+                                onFocus={(e) => {
+                                  e.target.style.height = 'auto';
+                                  e.target.style.height = e.target.scrollHeight + 'px';
+                                }}
+                              />
+                            </td>
+                            <td className="px-6 py-3">
+                              <input 
+                                type="text"
+                                list="charge-codes"
+                                value={row.chargeCode || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const next = [...editingRows];
+                                  next[i].chargeCode = val;
+                                  setEditingRows(next);
+                                  
+                                  if (val && !savedChargeCodes.includes(val)) {
+                                    const updatedCodes = [...savedChargeCodes, val];
+                                    setSavedChargeCodes(updatedCodes);
+                                    localStorage.setItem('focus-charge-codes', JSON.stringify(updatedCodes));
+                                  }
+                                }}
+                                placeholder="Code..."
+                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500/50 w-full transition-all"
+                              />
+                              <datalist id="charge-codes">
+                                {savedChargeCodes.map(code => <option key={code} value={code} />)}
+                              </datalist>
+                            </td>
+                            <td className="px-6 py-3 text-right">
+                              <input 
+                                type="text"
+                                value={row.hours}
+                                onChange={(e) => {
+                                  const next = [...editingRows];
+                                  next[i].hours = e.target.value;
+                                  setEditingRows(next);
+                                }}
+                                className="bg-transparent border-none outline-none text-indigo-400 font-mono font-bold text-right w-16 focus:text-white transition-colors"
+                              />
+                            </td>
+                            <td className="px-2 py-3">
+                              <button 
+                                onClick={() => {
+                                  setEditingRows(prev => prev.filter((_, idx) => idx !== i));
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 transition-all"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Suggested Tasks SECTION in Modal */}
-                {viewingTimesheet.suggestedTasks && viewingTimesheet.suggestedTasks.length > 0 && (
+                {viewingTimesheet?.suggestedTasks && viewingTimesheet.suggestedTasks.length > 0 && (
                   <div className="mt-12 pt-8 border-t border-white/10">
                     <div className="flex items-center gap-3 mb-6">
                       <div className="p-2 bg-indigo-500/20 rounded-xl">
@@ -2223,7 +2412,6 @@ export default function Home() {
                                 const updated = { ...viewingTimesheet };
                                 updated.suggestedTasks = updated.suggestedTasks?.filter((_, i) => i !== idx);
                                 setViewingTimesheet(updated as any);
-                                // Also update history in localStorage if needed, but for now just temporary UI removal is usually fine
                               }}
                               className="p-2 text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
                             >
@@ -2273,6 +2461,7 @@ export default function Home() {
           </div>
         </div>
       )}
+
     </main>
   );
 }
