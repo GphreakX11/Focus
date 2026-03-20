@@ -2464,15 +2464,17 @@ export default function Home() {
                                 </tr>
                               ))}
                               
-                              <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
-                                <td className="px-6 py-4">
-                                  <span className="font-medium text-indigo-300/50 italic text-xs">Daily Admin (Auto-Calculated)</span>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className="font-black text-indigo-300 tracking-widest uppercase text-[10px]">8100|IN-HOUSE TRAINING-09718100</span>
-                                </td>
-                                <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
-                              </tr>
+                              {adminHours > 0 && (
+                                <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
+                                  <td className="px-6 py-4">
+                                    <span className="font-medium text-indigo-300/50 italic text-xs">Daily Admin (Auto-Calculated)</span>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className="font-black text-indigo-300 tracking-widest uppercase text-[10px]">1000|EXPENSE ADMIN</span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
+                                </tr>
+                              )}
                               
                               {codeEntries.length === 0 && (
                                 <tr>
