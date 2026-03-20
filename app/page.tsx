@@ -753,17 +753,17 @@ export default function Home() {
       const lastReset = localStorage.getItem('last-midnight-reset') ?? '';
       if (lastReset === todayStr) return; // already ran today
 
-      setTodos(prev => prev.map(t => {
+      setTodos(prev => sortTodos(prev.map(t => {
         // Skip completed or already-categorized tasks
         if (t.completed || t.backburner || t.activeTab) return t;
         // Today tasks → Active
         return { ...t, activeTab: true, activeSince: todayStr };
-      }));
+      })));
 
       // On Sunday (day 0), demote Active tasks older than 7 days to Backburner
       const dayOfWeek = new Date().getDay();
       if (dayOfWeek === 0) {
-        setTodos(prev => prev.map(t => {
+        setTodos(prev => sortTodos(prev.map(t => {
           if (!t.activeTab || t.backburner) return t;
           if (!t.activeSince) return { ...t, backburner: true, activeTab: false };
           const msInDay = 86400000;
@@ -772,7 +772,7 @@ export default function Home() {
             return { ...t, backburner: true, activeTab: false };
           }
           return t;
-        }));
+        })));
       }
 
       localStorage.setItem('last-midnight-reset', todayStr);
@@ -1032,21 +1032,34 @@ export default function Home() {
   };
 
   const handleSaveTodo = (id: string) => {
-    setTodos(prev => prev.map(t => t.id === id ? { ...t, text: editingTodoText.trim() || t.text, dueDate: editingTodoDate || undefined } : t));
+    setTodos(prev => sortTodos(prev.map(t => t.id === id ? { ...t, text: editingTodoText.trim() || t.text, dueDate: editingTodoDate || undefined } : t)));
     setEditingTodoId(null);
     setEditingTodoDate('');
   };
 
-  const sortTodos = (list: Todo[]) =>
-    [...list].sort((a, b) => {
+  const sortTodos = (list: Todo[]) => {
+    const diffWeight = { hard: 3, medium: 2, easy: 1 };
+    return [...list].sort((a, b) => {
+      // 1. Completed state (uncompleted first)
       if (a.completed && !b.completed) return 1;
       if (!a.completed && b.completed) return -1;
+      
+      // 2. Only sort uncompleted tasks strictly
       if (!a.completed && !b.completed) {
+        // Difficulty Weight (Hard > Medium > Easy)
+        const weightA = diffWeight[a.difficulty || 'medium'] || 0;
+        const weightB = diffWeight[b.difficulty || 'medium'] || 0;
+        if (weightA !== weightB) return weightB - weightA;
+
+        // Priority (Star)
         if (a.important && !b.important) return -1;
         if (!a.important && b.important) return 1;
       }
-      return 0;
+
+      // Secondary sort: Creation Date / ID (newest first)
+      return parseInt(b.id) - parseInt(a.id);
     });
+  };
 
   const handleToggleTodo = (id: string) => {
     setTodos(prev => {
@@ -1140,15 +1153,7 @@ export default function Home() {
         ];
       }
       
-      return insertedList.sort((a, b) => {
-        if (a.completed && !b.completed) return 1;
-        if (!a.completed && b.completed) return -1;
-        if (!a.completed && !b.completed) {
-          if (a.important && !b.important) return -1;
-          if (!a.important && b.important) return 1;
-        }
-        return 0;
-      });
+      return sortTodos(insertedList);
     });
     setNewTodoText('');
     setTodoDifficulty('medium');
@@ -1243,11 +1248,11 @@ export default function Home() {
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringOffset = ringCircumference - (todoPercent / 100) * ringCircumference;
 
-  const visibleTodos = todos.filter(t => {
+  const visibleTodos = sortTodos(todos.filter(t => {
     if (todoView === 'backburner') return !!t.backburner;
     if (todoView === 'active') return !t.backburner && !!t.activeTab;
     return !t.backburner && !t.activeTab;
-  });
+  }));
   const visibleCount = visibleTodos.length;
 
   const todoListSection = visibleCount === 0 ? null : (
@@ -1415,7 +1420,7 @@ export default function Home() {
               {/* 4. Backburner Toggle */}
               <button 
                 onClick={() => { 
-                  setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: !t.backburner } : t)); 
+                  setTodos(prev => sortTodos(prev.map(t => t.id === todo.id ? { ...t, backburner: !t.backburner } : t))); 
                   setSelectedTodoId(null); 
                 }} 
                 className={`p-2.5 rounded-full transition-all active:scale-90 ${todo.backburner ? 'bg-orange-500/30 text-orange-400' : 'text-white/40 hover:text-orange-400 hover:bg-white/10'}`}
@@ -1462,11 +1467,11 @@ export default function Home() {
               <button 
                 onClick={() => {
                   if (todoView === 'backburner') {
-                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
+                    setTodos(prev => sortTodos(prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t)));
                   } else if (todoView === 'today') {
-                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: true, activeSince: getTodayStr() } : t));
+                    setTodos(prev => sortTodos(prev.map(t => t.id === todo.id ? { ...t, activeTab: true, activeSince: getTodayStr() } : t)));
                   } else {
-                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: false } : t));
+                    setTodos(prev => sortTodos(prev.map(t => t.id === todo.id ? { ...t, activeTab: false } : t)));
                   }
                   setSelectedTodoId(null);
                 }}
