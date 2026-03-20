@@ -234,12 +234,14 @@ export default function Home() {
             hours = "0.00";
           }
 
+          // Filter out TOTAL rows completely so they never enter the editable data state
+          const isTotal = day?.toLowerCase() === 'total' || day?.toLowerCase() === 'week' || day?.toLowerCase() === 'weekly admin';
+          if (isTotal) return null;
+
           // DAY INHERITANCE: If day is missing or '-', use the last valid day
-          const isTotal = day?.toLowerCase() === 'total' || day?.toLowerCase() === 'week';
-          
           if (!day || day === '-') {
             day = lastDay;
-          } else if (!isTotal) {
+          } else {
             lastDay = day;
           }
 
@@ -2462,19 +2464,17 @@ export default function Home() {
                                 </tr>
                               ))}
                               
-                              {adminHours > 0 && (
-                                <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
-                                  <td className="px-6 py-4">
-                                    <span className="font-medium text-indigo-300/50 italic text-xs">Daily Admin (Auto-Calculated)</span>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <span className="font-black text-indigo-300 tracking-widest uppercase text-[10px]">8100|IN-HOUSE TRAINING-09718100</span>
-                                  </td>
-                                  <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
-                                </tr>
-                              )}
+                              <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
+                                <td className="px-6 py-4">
+                                  <span className="font-medium text-indigo-300/50 italic text-xs">Daily Admin (Auto-Calculated)</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="font-black text-indigo-300 tracking-widest uppercase text-[10px]">8100|IN-HOUSE TRAINING-09718100</span>
+                                </td>
+                                <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
+                              </tr>
                               
-                              {codeEntries.length === 0 && adminHours === 0 && (
+                              {codeEntries.length === 0 && (
                                 <tr>
                                   <td colSpan={3} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
                                 </tr>
