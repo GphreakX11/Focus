@@ -136,7 +136,6 @@ export default function Home() {
   // Todo view tab
   const [todoView, setTodoView] = useState<'today' | 'active' | 'backburner'>('today');
   const [selectedTodoId, setSelectedTodoId] = useState(null as string | null);
-  const [selectedTaskId, setSelectedTaskId] = useState(null as string | null);
   const [activeTaskId, setActiveTaskId] = useState(null as string | null);
   const [todoDifficulty, setTodoDifficulty] = useState<'easy'|'medium'|'hard'>('medium');
 
@@ -1080,6 +1079,23 @@ export default function Home() {
     setTodos(prev => sortTodos(prev.map(t => t.id === id ? { ...t, important: !t.important } : t)));
   };
 
+  const handleCycleDifficulty = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTodos(prev => sortTodos(prev.map(t => {
+      if (t.id === id) {
+        const diffMap: Record<string, 'easy'|'medium'|'hard'> = { 'easy': 'medium', 'medium': 'hard', 'hard': 'easy' };
+        const newDiff = diffMap[t.difficulty || 'medium'];
+        if (t.completed) {
+          const oldPoints = t.difficulty === 'hard' ? 10 : t.difficulty === 'easy' ? 5 : 7;
+          const newPoints = newDiff === 'hard' ? 10 : newDiff === 'easy' ? 5 : 7;
+          updatePoints(newPoints - oldPoints);
+        }
+        return { ...t, difficulty: newDiff };
+      }
+      return t;
+    })));
+  };
+
   const moveTodo = (id: string, dir: 'up' | 'down') => {
     setTodos(prev => {
       const currentViewTodos = prev.filter(t => todoView === 'backburner' ? !!t.backburner : !t.backburner);
@@ -1313,15 +1329,10 @@ export default function Home() {
               </div>
             ) : (
               <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedTaskId(selectedTaskId === todo.id ? null : todo.id);
-                  setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id);
-                }}
-                className={`flex-1 text-left transition-all duration-300 min-w-0 outline-none group/text ${activeTaskId === todo.id ? 'scale-[1.03] origin-left' : ''} ${selectedTaskId === todo.id ? 'pr-2' : ''}`}
+                onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
+                className={`flex-1 text-left transition-all duration-300 min-w-0 outline-none group/text ${activeTaskId === todo.id ? 'scale-[1.03] origin-left' : ''}`}
               >
-                <div className={`transition-all duration-300 rounded-xl ${selectedTaskId === todo.id ? 'bg-indigo-500/10 ring-2 ring-indigo-500/50 p-2 -m-2' : ''}`}>
-                  <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none flex items-center gap-2 ${
+                <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none flex items-center gap-2 ${
                   todo.completed && todoView !== 'backburner' 
                     ? 'line-through text-white/40' 
                     : todo.dueDate === getTodayStr() 
@@ -1333,7 +1344,6 @@ export default function Home() {
                   <div className={`shrink-0 w-2 h-2 rounded-full transition-colors duration-300 ${todo.difficulty === 'hard' ? 'bg-rose-500' : todo.difficulty === 'easy' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                   {todo.text}
                 </span>
-                </div>
               </button>
             )}
 
@@ -1400,6 +1410,19 @@ export default function Home() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
+              </button>
+
+              {/* Difficulty Cycle Action */}
+              <button 
+                onClick={(e) => handleCycleDifficulty(todo.id, e)} 
+                className={`p-2.5 rounded-full transition-all active:scale-90 font-black text-lg w-10 h-10 flex items-center justify-center ${
+                  todo.difficulty === 'hard' ? 'text-rose-400 bg-rose-400/10 hover:bg-rose-400/20' : 
+                  todo.difficulty === 'easy' ? 'text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20' : 
+                  'text-amber-400 bg-amber-400/10 hover:bg-amber-400/20'
+                }`}
+                title="Cycle Difficulty"
+              >
+                {todo.difficulty === 'hard' ? 'H' : todo.difficulty === 'easy' ? 'E' : 'M'}
               </button>
 
               {/* Backburner Toggle */}
@@ -1506,7 +1529,6 @@ export default function Home() {
   return (
     <main 
       className={`min-h-screen relative overflow-x-hidden font-sans transition-all duration-1000 ease-in-out pb-20 sm:pb-0 bg-gradient-to-br ${getBackgroundClass()}`}
-      onClick={() => setSelectedTaskId(null)}
       style={{ paddingTop: 'var(--safe-top)' }}
     >
       
@@ -1793,44 +1815,22 @@ export default function Home() {
           <div className="w-full max-w-xl mx-auto px-4 sm:px-6 relative z-10 flex-1 flex flex-col items-center justify-start pb-4 mt-6">
             <form onSubmit={(e) => { e.preventDefault(); handleAddTodo(); }} className="w-full relative">
               <div className="flex gap-2 mb-3">
-                {(['easy', 'medium', 'hard'] as const).map(diff => {
-                  const isEffective = selectedTaskId 
-                    ? todos.find(t => t.id === selectedTaskId)?.difficulty === diff 
-                    : todoDifficulty === diff;
-                    
-                  return (
-                    <button
-                      key={diff}
-                      type="button"
-                      onClick={() => {
-                        if (selectedTaskId) {
-                          setTodos(prev => prev.map(t => {
-                            if (t.id === selectedTaskId) {
-                              // If task was completed, we need to adjust points
-                              if (t.completed) {
-                                const oldPoints = t.difficulty === 'hard' ? 10 : t.difficulty === 'easy' ? 5 : 7;
-                                const newPoints = diff === 'hard' ? 10 : diff === 'easy' ? 5 : 7;
-                                updatePoints(newPoints - oldPoints);
-                              }
-                              return { ...t, difficulty: diff };
-                            }
-                            return t;
-                          }));
-                        }
-                        setTodoDifficulty(diff);
-                      }}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
-                        isEffective 
-                          ? diff === 'easy' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
-                            : diff === 'medium' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
-                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/50 shadow-[0_0_10px_rgba(244,63,94,0.2)]'
-                          : 'bg-black/20 text-white/30 border border-white/5 hover:bg-white/5'
-                      }`}
-                    >
-                      {diff}
-                    </button>
-                  );
-                })}
+                {(['easy', 'medium', 'hard'] as const).map(diff => (
+                  <button
+                    key={diff}
+                    type="button"
+                    onClick={() => setTodoDifficulty(diff)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                      todoDifficulty === diff 
+                        ? diff === 'easy' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                          : diff === 'medium' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
+                        : 'bg-black/20 text-white/30 border border-white/5 hover:bg-white/5'
+                    }`}
+                  >
+                    {diff}
+                  </button>
+                ))}
               </div>
               <input 
                 type="text" 
