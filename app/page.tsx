@@ -14,6 +14,7 @@ const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.Cartesian
 const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false });
 const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
 const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false });
+const LineChart = dynamic(() => import('recharts').then(mod => mod.LineChart), { ssr: false });
 
 import { analyzeCalendar } from './calendar-actions';
 
@@ -33,6 +34,7 @@ type Todo = {
   activeTab?: boolean;  // true = in the "Active" middle tab
   activeSince?: string; // ISO date string (YYYY-MM-DD) when moved to Active
   dueDate?: string;     // ISO date string (YYYY-MM-DD)
+  difficulty?: 'easy' | 'medium' | 'hard';
 };
 
 type AnalysisHistory = {
@@ -135,6 +137,7 @@ export default function Home() {
   const [todoView, setTodoView] = useState<'today' | 'active' | 'backburner'>('today');
   const [selectedTodoId, setSelectedTodoId] = useState(null as string | null);
   const [activeTaskId, setActiveTaskId] = useState(null as string | null);
+  const [todoDifficulty, setTodoDifficulty] = useState<'easy'|'medium'|'hard'>('medium');
 
   // Gamification State
   const [productivityPoints, setProductivityPoints] = useState(0);
@@ -1054,8 +1057,10 @@ export default function Home() {
       let newList: Todo[];
       if (isNowCompleted) {
         newList = [...others, { ...toggled, completed: true }];
-        // Add 10 points for completing a task
-        updatePoints(10);
+        
+        // Award points based on difficulty
+        const points = toggled.difficulty === 'hard' ? 10 : toggled.difficulty === 'easy' ? 5 : 7;
+        updatePoints(points);
       } else {
 
         const firstCompletedIndex = others.findIndex(t => t.completed);
@@ -1102,6 +1107,7 @@ export default function Home() {
         important: false, 
         backburner: todoView === 'backburner',
         activeTab: todoView === 'active',
+        difficulty: todoDifficulty,
         ...(todoView === 'active' ? { activeSince: new Date().toLocaleDateString('en-CA') } : {})
       };
       const firstCompletedIndex = prev.findIndex(t => t.completed);
@@ -1127,8 +1133,8 @@ export default function Home() {
         return 0;
       });
     });
-    
     setNewTodoText('');
+    setTodoDifficulty('medium');
   };
 
   const handleAddHabit = () => {
@@ -1309,7 +1315,7 @@ export default function Home() {
                 onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
                 className={`flex-1 text-left transition-all duration-300 min-w-0 outline-none group/text ${activeTaskId === todo.id ? 'scale-[1.03] origin-left' : ''}`}
               >
-                <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none block ${
+                <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none flex items-center gap-2 ${
                   todo.completed && todoView !== 'backburner' 
                     ? 'line-through text-white/40' 
                     : todo.dueDate === getTodayStr() 
@@ -1318,6 +1324,7 @@ export default function Home() {
                         ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
                         : 'text-white'
                 } ${activeTaskId === todo.id ? 'text-indigo-300 drop-shadow-[0_0_12px_rgba(129,140,248,0.4)]' : 'group-hover/text:text-white/90'}`}>
+                  <div className={`shrink-0 w-2 h-2 rounded-full ${todo.difficulty === 'hard' ? 'bg-rose-500' : todo.difficulty === 'easy' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                   {todo.text}
                 </span>
               </button>
@@ -1707,80 +1714,91 @@ export default function Home() {
         <div className="sticky top-0 z-[60] w-full flex flex-col items-center gap-4 bg-transparent pb-4 px-4" style={{ paddingTop: 'var(--safe-top)' }}>
           <div className="w-full max-w-xl p-4 sm:p-6 flex flex-col items-center justify-center relative group animate-in fade-in slide-in-from-top-4 duration-700">
             <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col gap-4 shadow-lg w-full">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-500/20 rounded-xl">
-                    <Sparkles className="h-5 w-5 text-amber-400" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
-                    <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
-                  <div className="flex items-center gap-2 justify-end">
-                    <div className="text-sm font-bold text-emerald-400">
-                      Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-500/20 rounded-xl">
+                      <Sparkles className="h-5 w-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
+                      <div className="flex justify-start items-center gap-3">
+                        <div className="text-2xl font-black text-white">{productivityPoints} <span className="text-sm font-medium text-white/40">today</span></div>
+                        <div className="flex items-center gap-2 pr-4">
+                          <div className="h-6 w-16 opacity-80">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={Object.entries(dailyPointsHistory).sort((a,b)=>a[0].localeCompare(b[0])).slice(-7).map(d=>({points:d[1]}))}>
+                                <Line type="monotone" dataKey="points" stroke="#fcd34d" strokeWidth={2.5} dot={false} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                          {(() => {
+                            const sparklineData = Object.entries(dailyPointsHistory).sort((a, b) => a[0].localeCompare(b[0])).slice(-7).map(d => ({ points: d[1] }));
+                            const avgPrev = sparklineData.length > 1 ? sparklineData.filter(d => d !== sparklineData[sparklineData.length-1]).reduce((a, b) => a + b.points, 0) / (sparklineData.length - 1) : 0;
+                            let trendText = 'Steady';
+                            let trendColor = 'text-white/40';
+                            if (avgPrev > 0) {
+                              const diff = ((productivityPoints - avgPrev) / avgPrev) * 100;
+                              if (diff > 5) { trendText = `↑ ${Math.round(diff)}% vs avg`; trendColor = 'text-emerald-400'; }
+                              else if (diff < -5) { trendText = `↓ ${Math.abs(Math.round(diff))}% vs avg`; trendColor = 'text-rose-400'; }
+                            } else if (productivityPoints > 0) { trendText = '↑ vs avg'; trendColor = 'text-emerald-400'; }
+                            return <span className={`text-[10px] uppercase font-bold tracking-widest ${trendColor}`}>{trendText}</span>;
+                          })()}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Productivity Chart */}
-              <div className="w-full h-[250px] mt-2 bg-black/20 rounded-xl p-2 border border-white/5" style={{ minHeight: '300px' }}>
-                <div style={{ width: '100%', height: '300px', minHeight: '300px' }}>
-                  <ResponsiveContainer width="100%" height="100%" minHeight={250}>
-                    <ComposedChart
-                      data={Object.entries(dailyPointsHistory)
-                        .sort((a, b) => a[0].localeCompare(b[0]))
-                        .slice(-7)
-                        .map(([date, points]) => ({
-                          date: date.split('-').slice(1).join('/'),
-                          points
-                        }))}
-                      margin={{ top: 10, right: 10, bottom: 0, left: -20 }}
+                  <div className="text-right flex flex-col gap-1 items-end">
+                    <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Weekly Momentum</div>
+                    <div className="flex items-center gap-2 justify-end">
+                      <div className="text-sm font-bold text-emerald-400">
+                        Total: {Object.values(dailyPointsHistory).reduce((a, b) => a + b, 0)}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setProductivityPoints(0);
+                        const todayStr = new Date().toLocaleDateString('en-CA');
+                        setDailyPointsHistory(h => {
+                          const nextH = { ...h };
+                          delete nextH[todayStr];
+                          localStorage.setItem('focus-points-history', JSON.stringify(nextH));
+                          return nextH;
+                        });
+                      }}
+                      className="text-[9px] uppercase tracking-widest font-bold text-white/30 hover:text-rose-400 transition-colors bg-white/5 hover:bg-rose-500/10 px-2 py-1 rounded-md"
                     >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                      <XAxis 
-                        dataKey="date" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
-                      />
-                      <YAxis 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 'bold' }} 
-                      />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                        itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
-                      />
-                      <Area type="monotone" dataKey="points" fill="url(#colorPoints)" stroke="none" />
-                      <Bar dataKey="points" barSize={12} fill="#818cf8" radius={[4, 4, 0, 0]} />
-                      <Line type="monotone" dataKey="points" stroke="#fcd34d" strokeWidth={3} dot={{ r: 4, fill: '#fcd34d' }} />
-                      <defs>
-                        <linearGradient id="colorPoints" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                    </ComposedChart>
-                  </ResponsiveContainer>
+                      Reset Today
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
         </div>
       )}
 
       {!isFocusModeActive && (
         <>
           {/* HERO CARD: Task Input */}
-          <div className="w-full max-w-2xl rounded-3xl bg-white/5 backdrop-blur-3xl border border-indigo-400/20 shadow-[0_8px_40px_0_rgba(99,102,241,0.15)] px-6 py-6 sm:px-10 flex flex-col items-center relative overflow-hidden mt-6">
-            <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none rounded-3xl" />
+          <div className="w-full max-w-xl mx-auto px-4 sm:px-6 relative z-10 flex-1 flex flex-col items-center justify-start pb-4 mt-6">
             <form onSubmit={(e) => { e.preventDefault(); handleAddTodo(); }} className="w-full relative">
+              <div className="flex gap-2 mb-3">
+                {(['easy', 'medium', 'hard'] as const).map(diff => (
+                  <button
+                    key={diff}
+                    type="button"
+                    onClick={() => setTodoDifficulty(diff)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                      todoDifficulty === diff 
+                        ? diff === 'easy' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                          : diff === 'medium' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
+                        : 'bg-black/20 text-white/30 border border-white/5 hover:bg-white/5'
+                    }`}
+                  >
+                    {diff}
+                  </button>
+                ))}
+              </div>
               <input 
                 type="text" 
                 value={newTodoText}
@@ -1788,7 +1806,7 @@ export default function Home() {
                 onBlur={handleAddTodo}
                 enterKeyHint="done"
                 placeholder={todoView === 'backburner' ? "What do you kinda need to do?" : "What do you need to do today?"} 
-                className="w-full bg-transparent border-none outline-none text-2xl sm:text-4xl font-sans font-bold text-white placeholder:text-white/30 text-center tracking-tight transition-all duration-300"
+                className="w-full bg-black/20 border border-white/5 rounded-2xl text-2xl sm:text-4xl font-sans font-bold text-white placeholder:text-white/30 text-center tracking-tight transition-all pb-6 pt-6 px-4"
               />
             </form>
           </div>
