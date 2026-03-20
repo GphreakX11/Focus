@@ -136,6 +136,7 @@ export default function Home() {
   // Todo view tab
   const [todoView, setTodoView] = useState<'today' | 'active' | 'backburner'>('today');
   const [selectedTodoId, setSelectedTodoId] = useState(null as string | null);
+  const [selectedTaskId, setSelectedTaskId] = useState(null as string | null);
   const [activeTaskId, setActiveTaskId] = useState(null as string | null);
   const [todoDifficulty, setTodoDifficulty] = useState<'easy'|'medium'|'hard'>('medium');
 
@@ -1312,10 +1313,15 @@ export default function Home() {
               </div>
             ) : (
               <button 
-                onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
-                className={`flex-1 text-left transition-all duration-300 min-w-0 outline-none group/text ${activeTaskId === todo.id ? 'scale-[1.03] origin-left' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedTaskId(selectedTaskId === todo.id ? null : todo.id);
+                  setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id);
+                }}
+                className={`flex-1 text-left transition-all duration-300 min-w-0 outline-none group/text ${activeTaskId === todo.id ? 'scale-[1.03] origin-left' : ''} ${selectedTaskId === todo.id ? 'pr-2' : ''}`}
               >
-                <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none flex items-center gap-2 ${
+                <div className={`transition-all duration-300 rounded-xl ${selectedTaskId === todo.id ? 'bg-indigo-500/10 ring-2 ring-indigo-500/50 p-2 -m-2' : ''}`}>
+                  <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none flex items-center gap-2 ${
                   todo.completed && todoView !== 'backburner' 
                     ? 'line-through text-white/40' 
                     : todo.dueDate === getTodayStr() 
@@ -1324,9 +1330,10 @@ export default function Home() {
                         ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
                         : 'text-white'
                 } ${activeTaskId === todo.id ? 'text-indigo-300 drop-shadow-[0_0_12px_rgba(129,140,248,0.4)]' : 'group-hover/text:text-white/90'}`}>
-                  <div className={`shrink-0 w-2 h-2 rounded-full ${todo.difficulty === 'hard' ? 'bg-rose-500' : todo.difficulty === 'easy' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <div className={`shrink-0 w-2 h-2 rounded-full transition-colors duration-300 ${todo.difficulty === 'hard' ? 'bg-rose-500' : todo.difficulty === 'easy' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                   {todo.text}
                 </span>
+                </div>
               </button>
             )}
 
@@ -1497,7 +1504,11 @@ export default function Home() {
   );
 
   return (
-    <main className={`flex min-h-screen flex-col items-center p-4 sm:p-24 transition-colors duration-1000 ease-in-out bg-gradient-to-br ${getBackgroundClass()} relative overflow-x-hidden`} style={{ paddingTop: 'var(--safe-top)' }}>
+    <main 
+      className={`min-h-screen relative overflow-x-hidden font-sans transition-all duration-1000 ease-in-out pb-20 sm:pb-0 bg-gradient-to-br ${getBackgroundClass()}`}
+      onClick={() => setSelectedTaskId(null)}
+      style={{ paddingTop: 'var(--safe-top)' }}
+    >
       
       {/* Immersive DND Reminder Toast */}
       <div 
@@ -1782,22 +1793,44 @@ export default function Home() {
           <div className="w-full max-w-xl mx-auto px-4 sm:px-6 relative z-10 flex-1 flex flex-col items-center justify-start pb-4 mt-6">
             <form onSubmit={(e) => { e.preventDefault(); handleAddTodo(); }} className="w-full relative">
               <div className="flex gap-2 mb-3">
-                {(['easy', 'medium', 'hard'] as const).map(diff => (
-                  <button
-                    key={diff}
-                    type="button"
-                    onClick={() => setTodoDifficulty(diff)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
-                      todoDifficulty === diff 
-                        ? diff === 'easy' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
-                          : diff === 'medium' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
-                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
-                        : 'bg-black/20 text-white/30 border border-white/5 hover:bg-white/5'
-                    }`}
-                  >
-                    {diff}
-                  </button>
-                ))}
+                {(['easy', 'medium', 'hard'] as const).map(diff => {
+                  const isEffective = selectedTaskId 
+                    ? todos.find(t => t.id === selectedTaskId)?.difficulty === diff 
+                    : todoDifficulty === diff;
+                    
+                  return (
+                    <button
+                      key={diff}
+                      type="button"
+                      onClick={() => {
+                        if (selectedTaskId) {
+                          setTodos(prev => prev.map(t => {
+                            if (t.id === selectedTaskId) {
+                              // If task was completed, we need to adjust points
+                              if (t.completed) {
+                                const oldPoints = t.difficulty === 'hard' ? 10 : t.difficulty === 'easy' ? 5 : 7;
+                                const newPoints = diff === 'hard' ? 10 : diff === 'easy' ? 5 : 7;
+                                updatePoints(newPoints - oldPoints);
+                              }
+                              return { ...t, difficulty: diff };
+                            }
+                            return t;
+                          }));
+                        }
+                        setTodoDifficulty(diff);
+                      }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                        isEffective 
+                          ? diff === 'easy' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                            : diff === 'medium' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/50 shadow-[0_0_10px_rgba(244,63,94,0.2)]'
+                          : 'bg-black/20 text-white/30 border border-white/5 hover:bg-white/5'
+                      }`}
+                    >
+                      {diff}
+                    </button>
+                  );
+                })}
               </div>
               <input 
                 type="text" 
