@@ -13,6 +13,7 @@ const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: fa
 const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false });
 const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false });
 const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
+const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false });
 
 import { analyzeCalendar } from './calendar-actions';
 
@@ -142,6 +143,7 @@ export default function Home() {
   // Zen Focus Mode State
   const [isFocusModeActive, setIsFocusModeActive] = useState(false);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+  const hasAwardedFocusPoints = useRef(false);
 
 
   // AI Meeting Assistant State
@@ -912,6 +914,11 @@ export default function Home() {
             navigator.mediaSession.playbackState = 'paused';
           }
           
+          if (!hasAwardedFocusPoints.current) {
+            updatePoints(50);
+            hasAwardedFocusPoints.current = true;
+          }
+          
           if (timerMode === 'focus') {
             setTimerMode('break');
             setTimeLeft(breakDuration * 60);
@@ -992,6 +999,7 @@ export default function Home() {
     
     // Trigger immersive DND reminder specifically when STARTING a Focus block
     if (!isRunning && timerMode === 'focus') {
+      hasAwardedFocusPoints.current = false;
       setShowDndReminder(true);
       setTimeout(() => {
         setShowDndReminder(false);
@@ -1007,6 +1015,7 @@ export default function Home() {
     setTimerMode('focus');
     setTimeLeft(focusDuration * 60);
     setActiveTaskId(null);
+    hasAwardedFocusPoints.current = false;
   };
 
 
@@ -1220,26 +1229,43 @@ export default function Home() {
       className="flex flex-col gap-2 items-start w-full max-w-2xl mx-auto pr-1"
       style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
     >
-      {visibleTodos.map((todo) => (
+      {visibleTodos.map((todo, index) => (
         <div 
           key={todo.id} 
+          draggable={todoView !== 'backburner'}
+          onDragStart={(e) => handleDragStart(e, index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDrop={(e) => handleDrop(e, index)}
+          onDragEnd={handleDragEnd}
           className={`w-full rounded-xl transition-all duration-300 ${
             selectedTodoId === todo.id 
               ? 'relative z-[45] bg-white/10 shadow-2xl scale-[1.02] py-2 px-3' 
               : 'hover:bg-white/5 py-1 px-2'
-          }`}
+          } ${dragOverTodoIndex === index ? 'border-t-2 border-indigo-500 bg-white/5' : ''}`}
         >
           <div className="flex items-center gap-3 w-full min-h-[48px]">
             {/* Action Zone (Left) - Unified Single Source of Truth */}
             <div className="w-12 flex items-center justify-center shrink-0">
               <div className="w-10 h-10 flex items-center justify-center">
-                <input
-                  type="checkbox"
-                  checked={todo.completed}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={() => handleToggleTodo(todo.id)}
-                  className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
-                />
+                {todoView === 'backburner' ? (
+                  <button 
+                    onClick={() => {
+                      setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
+                    }}
+                    className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-90 transition-all"
+                    title="Reactivate Task"
+                  >
+                    <ArrowLeft className="h-6 w-6" />
+                  </button>
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={todo.completed}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => handleToggleTodo(todo.id)}
+                    className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                  />
+                )}
               </div>
             </div>
 
@@ -1741,6 +1767,7 @@ export default function Home() {
                     />
                     <Area type="monotone" dataKey="points" fill="url(#colorPoints)" stroke="none" />
                     <Bar dataKey="points" barSize={12} fill="#818cf8" radius={[4, 4, 0, 0]} />
+                    <Line type="monotone" dataKey="points" stroke="#fcd34d" strokeWidth={3} dot={{ r: 4, fill: '#fcd34d' }} />
                     <defs>
                       <linearGradient id="colorPoints" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
@@ -2487,34 +2514,10 @@ export default function Home() {
                           return editingRows.map((row, i) => (
                             <tr key={row.id} className="group hover:bg-white/5 transition-all">
                               <td className="px-6 py-3">
-                                <input 
-                                  type="text"
-                                  value={row.day || '-'}
-                                  onChange={(e) => {
-                                    const next = [...editingRows];
-                                    next[i].day = e.target.value;
-                                    setEditingRows(next);
-                                  }}
-                                  className="bg-transparent border-none outline-none text-white/40 font-bold focus:text-indigo-400 w-full transition-colors text-[10px] uppercase tracking-wider"
-                                />
+                                <span className="text-white/40 font-bold text-[10px] uppercase tracking-wider">{row.day || '-'}</span>
                               </td>
                               <td className="px-6 py-4">
-                                <textarea 
-                                  value={row.activity}
-                                  rows={1}
-                                  onChange={(e) => {
-                                    const next = [...editingRows];
-                                    next[i].activity = e.target.value;
-                                    setEditingRows(next);
-                                    e.target.style.height = 'auto';
-                                    e.target.style.height = e.target.scrollHeight + 'px';
-                                  }}
-                                  className="bg-transparent border-none outline-none text-white/90 font-medium focus:text-white focus:bg-white/5 rounded-lg px-2 -ml-2 w-full transition-all resize-none min-h-[1.5rem] leading-relaxed block overflow-hidden text-xs"
-                                  onFocus={(e) => {
-                                    e.target.style.height = 'auto';
-                                    e.target.style.height = e.target.scrollHeight + 'px';
-                                  }}
-                                />
+                                <span className="text-white/90 font-medium text-xs leading-relaxed block">{row.activity}</span>
                               </td>
                               <td className="px-6 py-3">
                                 <select 
@@ -2533,16 +2536,7 @@ export default function Home() {
                                 </select>
                               </td>
                               <td className="px-6 py-3 text-right">
-                                <input 
-                                  type="text"
-                                  value={row.hours}
-                                  onChange={(e) => {
-                                    const next = [...editingRows];
-                                    next[i].hours = e.target.value;
-                                    setEditingRows(next);
-                                  }}
-                                  className="bg-transparent border-none outline-none text-indigo-400 font-mono font-bold text-right w-16 focus:text-white transition-colors tracking-tight"
-                                />
+                                <span className="text-indigo-400 font-mono font-bold text-right tracking-tight">{parseFloat(row.hours || '0').toFixed(2)}</span>
                               </td>
                               <td className="px-2 py-3">
                                 <button 
