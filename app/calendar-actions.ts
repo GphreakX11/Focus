@@ -20,8 +20,8 @@ export async function analyzeCalendar(formData: FormData) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash"
-    });
+      model: "gemini-3-flash-preview"
+    }, { apiVersion: 'v1' });
 
     const base64Data = base64Image.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, "");
 

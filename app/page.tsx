@@ -1168,236 +1168,271 @@ export default function Home() {
       {visibleTodos.map((todo, index) => (
         <div 
           key={todo.id} 
-          className={`w-full rounded-xl transition-all duration-300 ${selectedTodoId === todo.id ? 'relative z-[45] bg-white/10 shadow-2xl scale-[1.02] py-1 px-2' : ''}`}
+          className={`w-full rounded-xl transition-all duration-300 ${
+            selectedTodoId === todo.id 
+              ? 'relative z-[45] bg-white/10 shadow-2xl scale-[1.02] py-2 px-3' 
+              : 'hover:bg-white/5 py-1 px-2'
+          }`}
         >
-          <div className="flex items-center gap-3 w-full py-2">
-            {todoView === 'backburner' && (
-              <button 
-                onClick={() => {
-                  setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
-                }}
-                className="p-1.5 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-95 transition-all shrink-0"
-                title="Reactivate Task"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-            )}
-            <input
-              type="checkbox"
-              checked={todo.completed}
-              onClick={(e) => e.stopPropagation()}
-              onChange={() => handleToggleTodo(todo.id)}
-              className="check-input w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 shrink-0"
-            />
+          <div className="flex items-center gap-3 w-full min-h-[48px]">
+            {/* Action Zone (Left) - Fixed Width */}
+            <div className="w-12 flex items-center justify-center shrink-0">
+              {todoView === 'backburner' ? (
+                <button 
+                  onClick={() => {
+                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
+                  }}
+                  className="p-1.5 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-90 transition-all"
+                  title="Reactivate Task"
+                >
+                  <ArrowLeft className="h-6 w-6" />
+                </button>
+              ) : (
+                <input
+                  type="checkbox"
+                  checked={todo.completed}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => handleToggleTodo(todo.id)}
+                  className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                />
+              )}
+            </div>
 
+            {/* Content Area */}
             {editingTodoId === todo.id ? (
-                <div className="flex-1 flex flex-col gap-3">
-                  <input
-                    type="text"
-                    value={editingTodoText}
-                    onChange={(e) => setEditingTodoText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveTodo(todo.id);
-                      if (e.key === 'Escape') setEditingTodoId(null);
-                    }}
-                    autoFocus
-                    className="flex-1 bg-transparent border-b-2 border-white/50 outline-none text-lg sm:text-2xl font-sans font-medium text-white min-w-0"
-                  />
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase font-bold text-white/40 ml-1">Due Date:</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={editingTodoDate}
-                        onChange={(e) => setEditingTodoDate(e.target.value)}
-                        className="bg-white/10 border-none rounded-lg px-2 py-2 text-sm text-white outline-none focus:bg-white/20 transition-all font-sans flex-1 min-h-[44px]"
-                      />
-                      <button 
-                        onClick={() => handleSaveTodo(todo.id)}
-                        className="p-2 rounded-xl bg-indigo-500 text-white shadow-lg active:scale-90 transition-all"
-                        title="Save Changes"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </button>
-                      <button 
-                        onClick={() => setEditingTodoId(null)}
-                        className="p-2 rounded-xl bg-white/10 text-white/50 hover:text-white active:scale-90 transition-all"
-                        title="Cancel"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
+              <div className="flex-1 flex flex-col gap-3">
+                <input
+                  type="text"
+                  value={editingTodoText}
+                  onChange={(e) => setEditingTodoText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveTodo(todo.id);
+                    if (e.key === 'Escape') setEditingTodoId(null);
+                  }}
+                  autoFocus
+                  className="flex-1 bg-transparent border-b-2 border-white/50 outline-none text-lg sm:text-2xl font-sans font-medium text-white min-w-0"
+                />
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] uppercase font-bold text-white/40 ml-1">Due Date:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={editingTodoDate}
+                      onChange={(e) => setEditingTodoDate(e.target.value)}
+                      className="bg-white/10 border-none rounded-lg px-2 py-2 text-sm text-white outline-none focus:bg-white/20 transition-all font-sans flex-1 min-h-[44px]"
+                    />
+                    <button 
+                      onClick={() => handleSaveTodo(todo.id)}
+                      className="p-2 rounded-xl bg-indigo-500 text-white shadow-lg active:scale-90 transition-all"
+                      title="Save Changes"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={() => setEditingTodoId(null)}
+                      className="p-2 rounded-xl bg-white/10 text-white/50 hover:text-white active:scale-90 transition-all"
+                      title="Cancel"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
+              </div>
             ) : (
               <button 
-                onClick={() => {
-                  if (selectedTodoId === todo.id) {
-                    setSelectedTodoId(null);
-                  } else {
-                    setSelectedTodoId(todo.id);
-                  }
-                }}
+                onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
                 className={`flex-1 text-left transition-all duration-300 min-w-0 outline-none group/text ${activeTaskId === todo.id ? 'scale-[1.03] origin-left' : ''}`}
               >
-                <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none block ${todo.completed ? 'line-through text-white/40' : todo.dueDate === getTodayStr() ? 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.4)]' : todo.important ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]' : 'text-white'} ${activeTaskId === todo.id ? 'text-indigo-300 drop-shadow-[0_0_12px_rgba(129,140,248,0.4)]' : 'group-hover/text:text-white/90'}`}>
+                <span className={`text-base sm:text-xl font-sans font-bold transition-all leading-tight select-none block ${
+                  todo.completed && todoView !== 'backburner' 
+                    ? 'line-through text-white/40' 
+                    : todo.dueDate === getTodayStr() 
+                      ? 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.4)]' 
+                      : todo.important 
+                        ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
+                        : 'text-white'
+                } ${activeTaskId === todo.id ? 'text-indigo-300 drop-shadow-[0_0_12px_rgba(129,140,248,0.4)]' : 'group-hover/text:text-white/90'}`}>
                   {todo.text}
                 </span>
               </button>
             )}
-            {todo.dueDate && editingTodoId !== todo.id && (
-              <span className={`px-2 py-1 rounded-lg text-xs sm:text-xs font-bold tracking-tight shrink-0 transition-all flex items-center gap-1.5 ${todo.dueDate === getTodayStr() ? 'bg-red-500 text-white border border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-white/10 text-white/90 border border-white/20'}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                {todo.dueDate === getTodayStr() ? 'Today' : todo.dueDate}
-              </span>
-            )}
-            {activeTaskId === todo.id && isRunning && (
-              <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-indigo-500/30 text-indigo-200 text-[10px] font-bold tracking-widest uppercase animate-pulse shadow-[0_0_15px_rgba(99,102,241,0.3)] shrink-0">
-                Focusing
-              </div>
-            )}
-            {todo.important && selectedTodoId !== todo.id && activeTaskId !== todo.id && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
-            )}
-            {todoView === 'active' && !todo.completed && (
+
+            {/* Status & Indicators */}
+            <div className="flex items-center gap-2 shrink-0">
+              {todo.dueDate && editingTodoId !== todo.id && (
+                <span className={`px-2 py-1 rounded-lg text-xs sm:text-xs font-bold tracking-tight shrink-0 transition-all flex items-center gap-1.5 ${todo.dueDate === getTodayStr() ? 'bg-red-500 text-white border border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-white/10 text-white/90 border border-white/20'}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {todo.dueDate === getTodayStr() ? 'Today' : todo.dueDate}
+                </span>
+              )}
+              {activeTaskId === todo.id && isRunning && (
+                <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-indigo-500/30 text-indigo-200 text-[10px] font-bold tracking-widest uppercase animate-pulse shadow-[0_0_15px_rgba(99,102,241,0.3)] shrink-0">
+                  Focusing
+                </div>
+              )}
+              {todo.important && selectedTodoId !== todo.id && activeTaskId !== todo.id && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
+              )}
+              {todoView === 'active' && !todo.completed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveTaskId(todo.id);
+                    setFocusedTaskId(todo.id);
+                    setIsFocusModeActive(true);
+                    if (!isRunning) setIsRunning(true);
+                  }}
+                  className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-400/10 active:scale-90 transition-all shrink-0"
+                  title="Zen Focus Mode"
+                >
+                  <Target className="h-5 w-5 stroke-[2.5]" />
+                </button>
+              )}
+              {/* Tap target — opens action bar without requiring a full-row press */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTaskId(todo.id);
-                  setFocusedTaskId(todo.id);
-                  setIsFocusModeActive(true);
-                  if (!isRunning) setIsRunning(true);
-                }}
-                className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-400/10 active:scale-90 transition-all shrink-0"
-                title="Zen Focus Mode"
-              >
-                <Target className="h-5 w-5 stroke-[2.5]" />
-              </button>
-            )}
-            {/* Tap target — opens action bar without requiring a full-row press */}
-            <button
-              onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
-              className={`ml-auto px-2 py-1 rounded-full text-xs transition-all shrink-0 ${
-                selectedTodoId === todo.id
-                  ? 'bg-white/15 text-white/80'
-                  : 'bg-white/5 text-white/20 hover:text-white/50'
-              }`}
-            >···</button>
+                onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
+                className={`px-2 py-1 rounded-full text-xs transition-all shrink-0 ${
+                  selectedTodoId === todo.id
+                    ? 'bg-white/15 text-white/80'
+                    : 'bg-white/5 text-white/20 hover:text-white/50'
+                }`}
+              >···</button>
+            </div>
           </div>
           {/* COMPACT Action Drawer: Horizontal Icon Bar */}
           {selectedTodoId === todo.id && (
             <div 
-              className="w-full mt-3 p-2 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-around animate-slide-down relative"
+              className="w-full mt-3 p-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-between animate-slide-down shadow-xl relative"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Focus Icon Action */}
+              {/* Focus Action */}
               <button 
                 onClick={() => {
                   setActiveTaskId(activeTaskId === todo.id ? null : todo.id);
                   if (activeTaskId !== todo.id && !isRunning) toggleTimer();
                   setSelectedTodoId(null);
                 }}
-                className={`p-3 rounded-xl transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-indigo-400 hover:bg-indigo-500/10'}`}
+                className={`p-2.5 rounded-full transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-lg' : 'text-indigo-400 hover:bg-white/10'}`}
                 title={activeTaskId === todo.id ? 'Stop Focus' : 'Start Focus'}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </button>
               
-              {/* Star Icon Action */}
+              {/* Star Action */}
               <button 
                 onClick={() => handleToggleStar(todo.id)} 
-                className={`p-3 rounded-xl transition-all active:scale-90 ${todo.important ? 'text-amber-400 bg-amber-400/10 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : 'text-amber-400/60 hover:text-amber-400 hover:bg-amber-400/10'}`}
+                className={`p-2.5 rounded-full transition-all active:scale-90 ${todo.important ? 'text-amber-400 bg-amber-400/20' : 'text-white/40 hover:text-amber-400 hover:bg-white/10'}`}
                 title={todo.important ? 'Remove Priority' : 'Mark Priority'}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
               </button>
 
-              {/* Backburner Icon Toggle */}
+              {/* Backburner Toggle */}
               <button 
-                onClick={() => { setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: !t.backburner } : t)); setSelectedTodoId(null); }} 
-                className={`p-3 rounded-xl transition-all active:scale-90 ${todo.backburner ? 'text-orange-400 bg-orange-400/10 shadow-[0_0_15px_rgba(251,146,60,0.3)]' : 'text-white/40 hover:text-orange-400 hover:bg-orange-500/10'}`}
-                title={todo.backburner ? 'Move to Today' : 'Move to Later'}
+                onClick={() => { 
+                  setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: !t.backburner } : t)); 
+                  setSelectedTodoId(null); 
+                }} 
+                className={`p-2.5 rounded-full transition-all active:scale-90 ${todo.backburner ? 'bg-orange-500/30 text-orange-400' : 'text-white/40 hover:text-orange-400 hover:bg-white/10'}`}
+                title={todo.backburner ? 'Move to Active' : 'Move to Backburner'}
               >
-                <div className="text-xl leading-none grayscale-[0.5] hover:grayscale-0 transition-all">🔥</div>
+                <span className="text-xl leading-none">🔥</span>
               </button>
 
-              {/* Rename Icon Action */}
+              {/* Rename Action */}
               <button 
-                onClick={() => { setEditingTodoId(todo.id); setEditingTodoText(todo.text); setEditingTodoDate(todo.dueDate || ''); setSelectedTodoId(null); }} 
-                className="p-3 rounded-xl transition-all active:scale-90 text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-500/10"
+                onClick={() => { 
+                  setEditingTodoId(todo.id); 
+                  setEditingTodoText(todo.text); 
+                  setEditingTodoDate(todo.dueDate || ''); 
+                  setSelectedTodoId(null); 
+                }} 
+                className="p-2.5 rounded-full transition-all active:scale-90 text-emerald-400 hover:bg-white/10"
                 title="Rename Task"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                 </svg>
               </button>
 
-              {/* Move Up/Down Buttons */}
-              {!todo.completed && (
+              {/* Move Up/Down (Hide for Backburner) */}
+              {todoView !== 'backburner' && !todo.completed && (
                 <>
                   <button
-                    onClick={() => { moveTodo(todo.id, 'up'); }}
-                    className="p-3 rounded-xl transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
+                    onClick={() => moveTodo(todo.id, 'up')}
+                    className="p-2.5 rounded-full transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
                     title="Move Up"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                     </svg>
                   </button>
                   <button
-                    onClick={() => { moveTodo(todo.id, 'down'); }}
-                    className="p-3 rounded-xl transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
+                    onClick={() => moveTodo(todo.id, 'down')}
+                    className="p-2.5 rounded-full transition-all active:scale-90 text-white/40 hover:text-white hover:bg-white/10"
                     title="Move Down"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
 
-                  {/* Move Between Today/Active buttons */}
+                  {/* Move Between Today/Active */}
                   {todoView === 'today' ? (
                     <button 
                       onClick={() => {
                         setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: true, activeSince: new Date().toLocaleDateString('en-CA') } : t));
                         setSelectedTodoId(null);
                       }}
-                      className="p-3 rounded-xl transition-all active:scale-90 text-indigo-400 hover:text-white hover:bg-indigo-500/20"
+                      className="p-2.5 rounded-full transition-all active:scale-90 text-indigo-400 hover:bg-white/10"
                       title="Move to Active"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                       </svg>
                     </button>
-                  ) : todoView === 'active' ? (
+                  ) : (
                     <button 
                       onClick={() => {
                         setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, activeTab: false } : t));
                         setSelectedTodoId(null);
                       }}
-                      className="p-3 rounded-xl transition-all active:scale-90 text-indigo-400 hover:text-white hover:bg-indigo-500/20"
-                      title="Move back to Today"
+                      className="p-2.5 rounded-full transition-all active:scale-90 text-indigo-400 hover:bg-white/10"
+                      title="Move to Today"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
                       </svg>
                     </button>
-                  ) : null}
+                  )}
                 </>
               )}
 
-              {/* Delete Icon Action */}
+              {/* Delete Action */}
               <button 
-                onClick={() => { setTodos(prev => prev.filter(t => t.id !== todo.id)); setSelectedTodoId(null); }} 
+                onClick={() => { 
+                  setTodos(prev => prev.filter(t => t.id !== todo.id)); 
+                  setSelectedTodoId(null); 
+                }} 
+                className="p-2.5 rounded-full transition-all active:scale-90 text-red-500 hover:bg-white/10"
+                title="Delete Task"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          )}
                 className="p-3 rounded-xl transition-all active:scale-90 text-red-500/40 hover:text-red-500 hover:bg-red-500/10"
                 title="Delete forever"
               >
