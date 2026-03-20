@@ -167,9 +167,7 @@ export default function Home() {
     });
   };
 
-
   const [completion, setCompletion] = useState('');
-
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Calendar Analyzer State
@@ -254,8 +252,22 @@ export default function Home() {
         .filter(r => r !== null) as TimecardRow[];
       
       if (rows.length > 0) {
+        // Auto-consolidate logic: Group by first 3 words of activity
+        const consolidated = rows.reduce((acc, row) => {
+          const first3Words = row.activity.split(' ').slice(0, 3).join(' ').toLowerCase();
+          const key = `${row.day}-${first3Words}`;
+          const existing = acc.find(r => `${r.day}-${r.activity.split(' ').slice(0, 3).join(' ').toLowerCase()}` === key);
+          
+          if (existing) {
+            existing.hours = (parseFloat(existing.hours) + parseFloat(row.hours)).toFixed(2);
+          } else {
+            acc.push({...row});
+          }
+          return acc;
+        }, [] as TimecardRow[]);
+
         setEditingRows(prev => {
-          const next = [...prev, ...rows];
+          const next = [...prev, ...consolidated];
           // Basic de-dupe to prevent accidental double-parsing of the same exact line
           return next;
         });
@@ -1208,7 +1220,7 @@ export default function Home() {
       className="flex flex-col gap-2 items-start w-full max-w-2xl mx-auto pr-1"
       style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
     >
-      {visibleTodos.map((todo, index) => (
+      {visibleTodos.map((todo) => (
         <div 
           key={todo.id} 
           className={`w-full rounded-xl transition-all duration-300 ${
@@ -1221,25 +1233,13 @@ export default function Home() {
             {/* Action Zone (Left) - Unified Single Source of Truth */}
             <div className="w-12 flex items-center justify-center shrink-0">
               <div className="w-10 h-10 flex items-center justify-center">
-                {todoView === 'backburner' ? (
-                  <button 
-                    onClick={() => {
-                      setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
-                    }}
-                    className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-90 transition-all"
-                    title="Reactivate Task"
-                  >
-                    <ArrowLeft className="h-6 w-6" />
-                  </button>
-                ) : (
-                  <input
-                    type="checkbox"
-                    checked={todo.completed}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => handleToggleTodo(todo.id)}
-                    className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
-                  />
-                )}
+                <input
+                  type="checkbox"
+                  checked={todo.completed}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => handleToggleTodo(todo.id)}
+                  className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                />
               </div>
             </div>
 
@@ -1316,29 +1316,6 @@ export default function Home() {
                   {todo.dueDate === getTodayStr() ? 'Today' : todo.dueDate}
                 </span>
               )}
-              {activeTaskId === todo.id && isRunning && (
-                <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-indigo-500/30 text-indigo-200 text-[10px] font-bold tracking-widest uppercase animate-pulse shadow-[0_0_15px_rgba(99,102,241,0.3)] shrink-0">
-                  Focusing
-                </div>
-              )}
-              {todo.important && selectedTodoId !== todo.id && activeTaskId !== todo.id && (
-                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
-              )}
-              {todoView === 'active' && !todo.completed && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveTaskId(todo.id);
-                    setFocusedTaskId(todo.id);
-                    setIsFocusModeActive(true);
-                    if (!isRunning) setIsRunning(true);
-                  }}
-                  className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-400/10 active:scale-90 transition-all shrink-0"
-                  title="Zen Focus Mode"
-                >
-                  <Target className="h-5 w-5 stroke-[2.5]" />
-                </button>
-              )}
               {/* Tap target — opens action bar without requiring a full-row press */}
               <button
                 onClick={() => setSelectedTodoId(selectedTodoId === todo.id ? null : todo.id)}
@@ -1356,20 +1333,32 @@ export default function Home() {
               className="w-full mt-3 p-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-between animate-slide-down shadow-xl relative"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Focus Action */}
-              <button 
-                onClick={() => {
-                  setActiveTaskId(activeTaskId === todo.id ? null : todo.id);
-                  if (activeTaskId !== todo.id && !isRunning) toggleTimer();
-                  setSelectedTodoId(null);
-                }}
-                className={`p-2.5 rounded-full transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-lg' : 'text-indigo-400 hover:bg-white/10'}`}
-                title={activeTaskId === todo.id ? 'Stop Focus' : 'Start Focus'}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </button>
+              {/* Focus Target Action / Reactivate Arrow */}
+              {todoView === 'backburner' ? (
+                <button 
+                  onClick={() => {
+                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
+                    setSelectedTodoId(null);
+                  }}
+                  className="p-2.5 rounded-full transition-all active:scale-90 text-orange-400 hover:bg-white/10"
+                  title="Reactivate Task"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setActiveTaskId(todo.id);
+                    setFocusedTaskId(todo.id);
+                    setIsFocusModeActive(true);
+                    setSelectedTodoId(null);
+                  }}
+                  className={`p-2.5 rounded-full transition-all active:scale-90 ${activeTaskId === todo.id ? 'bg-indigo-500 text-white shadow-lg' : 'text-indigo-400 hover:bg-white/10'}`}
+                  title="Enter Focus Mode"
+                >
+                  <Target className="h-5 w-5 stroke-[2.5]" />
+                </button>
+              )}
               
               {/* Star Action */}
               <button 
@@ -1722,8 +1711,8 @@ export default function Home() {
               </div>
 
               {/* Productivity Chart */}
-              <div className="w-full h-[250px] mt-2 bg-black/20 rounded-xl p-2 border border-white/5">
-                <ResponsiveContainer width="100%" height={250}>
+              <div className="w-full h-[250px] mt-2 bg-black/20 rounded-xl p-2 border border-white/5" style={{ minHeight: '250px' }}>
+                <ResponsiveContainer width="100%" height="100%" minHeight={250}>
                   <ComposedChart
                     data={Object.entries(dailyPointsHistory)
                       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -2412,73 +2401,61 @@ export default function Home() {
                   <table className="w-full text-sm text-left">
                     <thead className="bg-white/5 text-[10px] uppercase text-white/30 tracking-widest">
                       <tr>
-                        <th className="px-6 py-4 font-black">Day</th>
-                        <th className="px-6 py-4 font-black">Activity Description</th>
-                        <th className="px-6 py-4 font-black">Charge Code</th>
-                        <th className="px-6 py-4 font-black text-right">Hours</th>
-                        <th className="px-2 py-4 w-10"></th>
+                        {timecardViewMode === 'daily' ? (
+                          <>
+                            <th className="px-6 py-4 font-black">Combined Charge Code</th>
+                            <th className="px-6 py-4 font-black text-right">Total Hours</th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="px-6 py-4 font-black">Day</th>
+                            <th className="px-6 py-4 font-black">Activity Description</th>
+                            <th className="px-6 py-4 font-black">Charge Code</th>
+                            <th className="px-6 py-4 font-black text-right">Hours</th>
+                            <th className="px-2 py-4 w-10"></th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {(() => {
                         if (timecardViewMode === 'daily') {
-                          // AGGREGATE BY ACTIVITY NAME
+                          // AGGREGATE purely BY ASSIGNED CHARGE CODE
                           const dayRows = editingRows.filter(r => r.day === selectedDayFilter);
-                          const activityGroups: Record<string, { totalHours: number, chargeCode: string, originalIds: string[] }> = {};
+                          const summaryByCode: Record<string, number> = {};
                           
                           dayRows.forEach(r => {
-                            const name = r.activity.trim();
+                            const code = r.chargeCode || 'UNASSIGNED';
                             const h = parseFloat(r.hours) || 0;
-                            if (!activityGroups[name]) {
-                              activityGroups[name] = { totalHours: 0, chargeCode: r.chargeCode || '', originalIds: [] };
-                            }
-                            activityGroups[name].totalHours += h;
-                            activityGroups[name].originalIds.push(r.id);
-                            // Keep the first charge code found or the one that is set
-                            if (!activityGroups[name].chargeCode && r.chargeCode) {
-                              activityGroups[name].chargeCode = r.chargeCode;
-                            }
+                            summaryByCode[code] = (summaryByCode[code] || 0) + h;
                           });
+
+                          const codeEntries = Object.entries(summaryByCode);
+                          const totalCharged = codeEntries.reduce((a, b) => a + b[1], 0);
+                          const adminHours = Math.max(0, 8 - totalCharged);
 
                           return (
                             <>
-                              {Object.entries(activityGroups).map(([name, data]) => (
-                                <tr key={name} className="hover:bg-white/5 transition-all">
-                                  <td className="px-6 py-3 text-white/20 font-bold">{selectedDayFilter}</td>
-                                  <td className="px-6 py-4 text-white/90 font-medium text-xs leading-relaxed">{name}</td>
-                                  <td className="px-6 py-3">
-                                    <select 
-                                      value={data.chargeCode}
-                                      onChange={(e) => {
-                                        const newCode = e.target.value;
-                                        setEditingRows(prev => prev.map(r => 
-                                          data.originalIds.includes(r.id) ? { ...r, chargeCode: newCode } : r
-                                        ));
-                                      }}
-                                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-white outline-none focus:border-indigo-500/50 w-full transition-all uppercase tracking-widest font-bold appearance-none"
-                                    >
-                                      <option value="" className="bg-slate-900">Select Code...</option>
-                                      {savedChargeCodes.map(code => (
-                                        <option key={code} value={code} className="bg-slate-900">{code}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="px-6 py-3 text-right text-indigo-400 font-mono font-bold tracking-tight">{data.totalHours.toFixed(2)}</td>
-                                  <td className="px-2 py-3 text-right">
-                                    <button 
-                                      onClick={() => {
-                                        setEditingRows(prev => prev.filter(r => !data.originalIds.includes(r.id)));
-                                      }}
-                                      className="p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
-                                  </td>
+                              {codeEntries.map(([code, hours]) => (
+                                <tr key={code} className="hover:bg-white/5 transition-all">
+                                  <td className="px-6 py-4 font-bold text-white tracking-widest uppercase text-xs">{code}</td>
+                                  <td className="px-6 py-4 text-right text-indigo-400 font-mono font-black text-lg">{hours.toFixed(2)}</td>
                                 </tr>
                               ))}
+                              
+                              <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-col">
+                                    <span className="font-black text-indigo-300 tracking-widest uppercase text-xs">8100|IN-HOUSE TRAINING-09718100 (ADMIN)</span>
+                                    <span className="text-[10px] text-indigo-300/40 font-bold italic">Auto-calculated to reach 8.0h</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
+                              </tr>
+                              
                               {dayRows.length === 0 && (
                                 <tr>
-                                  <td colSpan={5} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
+                                  <td colSpan={2} className="px-6 py-12 text-center text-white/20 italic font-medium">No activity recorded for {selectedDayFilter}</td>
                                 </tr>
                               )}
                             </>
@@ -2539,8 +2516,21 @@ export default function Home() {
                                   }}
                                 />
                               </td>
-                              <td className="px-6 py-3 text-white/30 font-bold tracking-widest uppercase text-[10px]">
-                                {row.chargeCode || '-'}
+                              <td className="px-6 py-3">
+                                <select 
+                                  value={row.chargeCode || ''}
+                                  onChange={(e) => {
+                                    const next = [...editingRows];
+                                    next[i].chargeCode = e.target.value;
+                                    setEditingRows(next);
+                                  }}
+                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 flex-1 text-[10px] text-white outline-none focus:border-indigo-500/50 w-full transition-all uppercase tracking-widest font-bold appearance-none min-w-[120px]"
+                                >
+                                  <option value="" className="bg-slate-900">Code...</option>
+                                  {savedChargeCodes.map(code => (
+                                    <option key={code} value={code} className="bg-slate-900">{code}</option>
+                                  ))}
+                                </select>
                               </td>
                               <td className="px-6 py-3 text-right">
                                 <input 
@@ -2571,71 +2561,6 @@ export default function Home() {
                     </tbody>
                   </table>
                 </div>
-
-                {/* Final Unanet Export Summary (Daily View Only) */}
-                {timecardViewMode === 'daily' && (
-                  <div className="mt-8 pt-8 border-t border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="p-2 bg-indigo-500/20 rounded-xl">
-                        <FileText className="h-5 w-5 text-indigo-400" />
-                      </div>
-                      <h3 className="text-lg font-bold text-white tracking-tight">Final Unanet Export Summary</h3>
-                    </div>
-
-                    <div className="bg-black/40 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
-                      <table className="w-full text-sm text-left">
-                        <thead className="bg-white/5 text-[10px] uppercase text-white/30 tracking-widest font-black">
-                          <tr>
-                            <th className="px-8 py-4">Charge Code</th>
-                            <th className="px-8 py-4 text-right">Total Hours Worked</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {(() => {
-                            const dayRows = editingRows.filter(r => r.day === selectedDayFilter);
-                            const summaryByCode: Record<string, number> = {};
-                            dayRows.forEach(r => {
-                              const code = r.chargeCode || 'UNASSIGNED';
-                              const h = parseFloat(r.hours) || 0;
-                              summaryByCode[code] = (summaryByCode[code] || 0) + h;
-                            });
-
-                            const codeEntries = Object.entries(summaryByCode);
-                            const totalCharged = codeEntries.reduce((a, b) => a + b[1], 0);
-                            const adminHours = Math.max(0, 8 - totalCharged);
-
-                            const rows = codeEntries.map(([code, hours]) => (
-                              <tr key={code} className="hover:bg-white/5 transition-all">
-                                <td className="px-8 py-4 font-bold text-white tracking-widest uppercase text-xs">{code}</td>
-                                <td className="px-8 py-4 text-right text-indigo-400 font-mono font-black text-lg">{hours.toFixed(2)}</td>
-                              </tr>
-                            ));
-
-                            return (
-                              <>
-                                {rows}
-                                <tr className="bg-indigo-500/10 transition-all border-t border-indigo-500/30">
-                                  <td className="px-8 py-4">
-                                    <div className="flex flex-col">
-                                      <span className="font-black text-indigo-300 tracking-widest uppercase text-xs">8100|IN-HOUSE TRAINING-09718100 (ADMIN)</span>
-                                      <span className="text-[10px] text-indigo-300/40 font-bold italic">Auto-calculated to reach 8.0h</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-8 py-4 text-right text-indigo-300 font-mono font-black text-lg">{adminHours.toFixed(2)}</td>
-                                </tr>
-                                <tr className="bg-white/5">
-                                  <td className="px-8 py-3 text-[10px] font-black uppercase text-white/20 tracking-[0.2em]">Daily Total</td>
-                                  <td className="px-8 py-3 text-right text-white/90 font-mono font-black text-lg italic">8.00</td>
-                                </tr>
-                              </>
-                            );
-                          })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
                 {/* Suggested Tasks SECTION in Modal */}
                 {viewingTimesheet?.suggestedTasks && viewingTimesheet.suggestedTasks.length > 0 && (
                   <div className="mt-12 pt-8 border-t border-white/10">
@@ -2734,6 +2659,33 @@ export default function Home() {
 
             {/* Timer component (Re-rendered here) */}
             <div className="flex flex-col items-center gap-8 animate-in zoom-in-95 duration-1000 delay-300">
+              
+              {!isRunning && (
+                 <div className="flex items-center gap-6 mt-4 opacity-70">
+                   <button 
+                     onClick={() => {
+                        const nextDuration = Math.max(5, focusDuration - 5);
+                        setFocusDuration(nextDuration);
+                        setTimeLeft(nextDuration * 60);
+                     }}
+                     className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white transition-all text-xl font-bold font-mono"
+                   >
+                     - 5
+                   </button>
+                   <span className="text-white/40 uppercase tracking-widest text-xs font-bold w-20 text-center">Adjust</span>
+                   <button 
+                     onClick={() => {
+                        const nextDuration = Math.min(120, focusDuration + 5);
+                        setFocusDuration(nextDuration);
+                        setTimeLeft(nextDuration * 60);
+                     }}
+                     className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white transition-all text-xl font-bold font-mono"
+                   >
+                     + 5
+                   </button>
+                 </div>
+              )}
+
               <div 
                 className={`text-8xl sm:text-9xl md:text-[12rem] font-mono font-extralight tracking-widest transition-all duration-500 ${getTimerColorClass()}`}
               >
