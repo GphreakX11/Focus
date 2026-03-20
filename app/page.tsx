@@ -271,9 +271,10 @@ export default function Home() {
         }, [] as TimecardRow[]);
 
         setEditingRows(prev => {
-          const next = [...prev, ...consolidated];
-          // Basic de-dupe to prevent accidental double-parsing of the same exact line
-          return next;
+          // Replace existing day's data instead of appending if uploaded again
+          const incomingDays = new Set(consolidated.map(r => r.day));
+          const filteredPrev = prev.filter(r => !incomingDays.has(r.day));
+          return [...filteredPrev, ...consolidated];
         });
       }
       setIsAiDrawerOpen(false);
@@ -729,7 +730,7 @@ export default function Home() {
       localStorage.setItem('focus-master-timesheet', JSON.stringify(editingRows));
       if (activeTaskId) localStorage.setItem('focus-active-id', activeTaskId);
     }
-  }, [todos, focusDuration, breakDuration, habits, activeTaskId, mounted]);
+  }, [todos, focusDuration, breakDuration, habits, activeTaskId, mounted, editingRows]);
 
   // Background color logic
   useEffect(() => {
@@ -2416,9 +2417,10 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-                <div className="overflow-x-auto rounded-3xl border border-white/10 mb-8 shadow-inner">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-white/5 text-[10px] uppercase text-white/30 tracking-widest">
+                <div className="w-full mt-2 rounded-3xl border border-white/10 mb-8 shadow-inner overflow-hidden">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-sm text-left table-auto min-w-[500px]">
+                      <thead className="bg-white/5 text-[10px] uppercase text-white/30 tracking-widest">
                       <tr>
                         {timecardViewMode === 'daily' ? (
                           <>
@@ -2446,6 +2448,7 @@ export default function Home() {
                           
                           dayRows.forEach(r => {
                             const code = r.chargeCode || 'UNASSIGNED';
+                            if (code === 'UNASSIGNED') return; // Ignore Unassigned exactly as requested
                             const h = parseFloat(r.hours) || 0;
                             summaryByCode[code] = (summaryByCode[code] || 0) + h;
                           });
@@ -2507,31 +2510,33 @@ export default function Home() {
                           ));
                         } else {
                           // RAW VIEW (Editable, NO Dropdowns as requested)
-                          let rawRows = editingRows.map((row, i) => (
-                            <tr key={row.id} className="group hover:bg-white/5 transition-all">
-                              <td className="px-6 py-3">
+                          const rawRows = editingRows.map((row, i) => (
+                            <tr key={row.id} className="group hover:bg-white/5 transition-all outline-none border-b border-white/5 last:border-0 border-l-2 border-l-transparent hover:border-l-indigo-500">
+                              <td className="px-3 sm:px-6 py-4 align-top w-20">
                                 <span className="text-white/40 font-bold text-[10px] uppercase tracking-wider">{row.day || '-'}</span>
                               </td>
-                              <td className="px-6 py-4">
-                                <span className="text-white/90 font-medium text-xs leading-relaxed block">{row.activity}</span>
+                              <td className="px-3 sm:px-6 py-4 min-w-[140px] max-w-[200px] break-words whitespace-normal">
+                                <span className="text-white/90 font-medium text-xs leading-relaxed block max-h-20 overflow-y-auto custom-scrollbar">{row.activity}</span>
+                                
+                                {/* Charge code moved below activity on mobile for better layout */}
+                                <div className="mt-2 text-xs uppercase text-indigo-300">
+                                  <select 
+                                    value={row.chargeCode || ''}
+                                    onChange={(e) => {
+                                      const next = [...editingRows];
+                                      next[i].chargeCode = e.target.value;
+                                      setEditingRows(next);
+                                    }}
+                                    className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 flex-1 text-[10px] text-indigo-200 outline-none focus:border-indigo-500/50 w-full transition-all tracking-widest font-bold appearance-none mt-1"
+                                  >
+                                    <option value="" className="bg-slate-900">Code...</option>
+                                    {savedChargeCodes.map(code => (
+                                      <option key={code} value={code} className="bg-slate-900">{code}</option>
+                                    ))}
+                                  </select>
+                                </div>
                               </td>
-                              <td className="px-6 py-3">
-                                <select 
-                                  value={row.chargeCode || ''}
-                                  onChange={(e) => {
-                                    const next = [...editingRows];
-                                    next[i].chargeCode = e.target.value;
-                                    setEditingRows(next);
-                                  }}
-                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 flex-1 text-[10px] text-white outline-none focus:border-indigo-500/50 w-full transition-all uppercase tracking-widest font-bold appearance-none min-w-[120px]"
-                                >
-                                  <option value="" className="bg-slate-900">Code...</option>
-                                  {savedChargeCodes.map(code => (
-                                    <option key={code} value={code} className="bg-slate-900">{code}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-6 py-3 text-right">
+                              <td className="px-3 sm:px-6 py-4 align-top text-right w-24">
                                 <input 
                                   type="number"
                                   step="0.25"
@@ -2541,15 +2546,15 @@ export default function Home() {
                                     next[i].hours = e.target.value;
                                     setEditingRows(next);
                                   }}
-                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 w-20 text-indigo-400 font-mono font-bold text-right tracking-tight outline-none focus:border-indigo-500/50 transition-all"
+                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 w-[60px] text-indigo-400 font-mono font-bold text-center tracking-tight outline-none focus:border-indigo-500/50 transition-all text-xs"
                                 />
                               </td>
-                              <td className="px-2 py-3">
+                              <td className="px-2 py-4 align-top text-center w-12">
                                 <button 
                                   onClick={() => {
                                     setEditingRows(prev => prev.filter(r => r.id !== row.id));
                                   }}
-                                  className="opacity-100 p-2 text-white/10 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                                  className="p-2 text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -2561,6 +2566,7 @@ export default function Home() {
                       })()}
                     </tbody>
                   </table>
+                  </div>
                 </div>
                 {/* Suggested Tasks SECTION in Modal */}
                 {viewingTimesheet?.suggestedTasks && viewingTimesheet.suggestedTasks.length > 0 && (
