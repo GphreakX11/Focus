@@ -1218,27 +1218,29 @@ export default function Home() {
           }`}
         >
           <div className="flex items-center gap-3 w-full min-h-[48px]">
-            {/* Action Zone (Left) - Fixed Width */}
+            {/* Action Zone (Left) - Unified Single Source of Truth */}
             <div className="w-12 flex items-center justify-center shrink-0">
-              {todoView === 'backburner' ? (
-                <button 
-                  onClick={() => {
-                    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
-                  }}
-                  className="p-1.5 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-90 transition-all"
-                  title="Reactivate Task"
-                >
-                  <ArrowLeft className="h-6 w-6" />
-                </button>
-              ) : (
-                <input
-                  type="checkbox"
-                  checked={todo.completed}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={() => handleToggleTodo(todo.id)}
-                  className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
-                />
-              )}
+              <div className="w-10 h-10 flex items-center justify-center">
+                {todoView === 'backburner' ? (
+                  <button 
+                    onClick={() => {
+                      setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, backburner: false, activeTab: true, activeSince: getTodayStr() } : t));
+                    }}
+                    className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 active:scale-90 transition-all"
+                    title="Reactivate Task"
+                  >
+                    <ArrowLeft className="h-6 w-6" />
+                  </button>
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={todo.completed}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => handleToggleTodo(todo.id)}
+                    className="check-input w-7 h-7 rounded-full border-2 border-white/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                  />
+                )}
+              </div>
             </div>
 
             {/* Content Area */}
