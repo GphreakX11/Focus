@@ -174,7 +174,10 @@ export default function Home() {
   const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(new Set());
   const [editingRows, setEditingRows] = useState<TimecardRow[]>([]);
   const [savedChargeCodes, setSavedChargeCodes] = useState(DEFAULT_CHARGE_CODES);
-  const [isTimecardView, setIsTimecardView] = useState(false);
+  const [timecardViewMode, setTimecardViewMode] = useState<'raw' | 'daily' | 'weekly'>('raw');
+  const [selectedDayFilter, setSelectedDayFilter] = useState('Monday');
+  const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
+  const [manualEntryForm, setManualEntryForm] = useState({ activity: '', day: 'Monday', hours: '1.0', chargeCode: DEFAULT_CHARGE_CODES[0] });
 
 
   const saveToCalendarHistory = (markdown: string, tasks?: { task_name: string, related_meeting: string }[]) => {
@@ -672,6 +675,15 @@ export default function Home() {
       } catch (e) {}
     }
 
+    // Load Master Timesheet
+    const savedMaster = localStorage.getItem('focus-master-timesheet');
+    if (savedMaster) {
+      try {
+        const parsed = JSON.parse(savedMaster);
+        if (Array.isArray(parsed)) setEditingRows(parsed);
+      } catch (e) {}
+    }
+
     setTimeLeft(initialFocus * 60);
 
 
@@ -684,6 +696,7 @@ export default function Home() {
       localStorage.setItem('focus-duration', focusDuration.toString());
       localStorage.setItem('break-duration', breakDuration.toString());
       localStorage.setItem('focus-habits', JSON.stringify(habits));
+      localStorage.setItem('focus-master-timesheet', JSON.stringify(editingRows));
       if (activeTaskId) localStorage.setItem('focus-active-id', activeTaskId);
     }
   }, [todos, focusDuration, breakDuration, habits, activeTaskId, mounted]);
