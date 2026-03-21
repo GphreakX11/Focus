@@ -35,6 +35,7 @@ type Todo = {
   activeSince?: string; // ISO date string (YYYY-MM-DD) when moved to Active
   dueDate?: string;     // ISO date string (YYYY-MM-DD)
   difficulty?: 'easy' | 'medium' | 'hard';
+  completedDate?: string; // ISO date string (YYYY-MM-DD)
 };
 
 type AnalysisHistory = {
@@ -1071,18 +1072,18 @@ export default function Home() {
       const others = prev.filter(t => t.id !== id);
       let newList: Todo[];
       if (isNowCompleted) {
-        newList = [...others, { ...toggled, completed: true }];
+        newList = [...others, { ...toggled, completed: true, completedDate: getTodayStr() }];
         
         // Award points based on difficulty
         const points = toggled.difficulty === 'hard' ? 10 : toggled.difficulty === 'easy' ? 5 : 7;
         updatePoints(points);
       } else {
-
+        const { completedDate, ...rest } = toggled;
         const firstCompletedIndex = others.findIndex(t => t.completed);
         const insertIndex = firstCompletedIndex === -1 ? others.length : firstCompletedIndex;
         newList = [
           ...others.slice(0, insertIndex),
-          { ...toggled, completed: false },
+          { ...rest, completed: false },
           ...others.slice(insertIndex)
         ];
       }
@@ -1724,8 +1725,11 @@ export default function Home() {
                     {/* Ring */}
                     <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
                       {(() => {
-                        const targetPoints = 50;
-                        const fillPercent = Math.min((productivityPoints / targetPoints) * 100, 100);
+                        const today = getTodayStr();
+                        const completedTodayCount = todos.filter(t => t.completed && t.completedDate === today && !t.backburner).length;
+                        const pendingFocusCount = todos.filter(t => !t.completed && !t.backburner).length;
+                        const denominator = completedTodayCount + pendingFocusCount;
+                        const fillPercent = denominator === 0 ? 0 : (completedTodayCount / denominator) * 100;
                         const radius = 24;
                         const circumference = 2 * Math.PI * radius;
                         const offset = circumference - (fillPercent / 100) * circumference;
@@ -1742,7 +1746,6 @@ export default function Home() {
                       <div className="text-[10px] uppercase font-bold tracking-widest text-white/40">Productivity Points</div>
                       <div className="flex items-baseline gap-2">
                         <div className="text-3xl font-black text-white leading-none tracking-tighter">{productivityPoints}</div>
-                        <div className="text-[10px] font-bold text-[#00B2A9]/60 uppercase tracking-widest">Target: 50</div>
                       </div>
                       <div className="mt-1 flex items-center gap-2 pr-4">
                         <div className="h-5 w-16 opacity-80">
