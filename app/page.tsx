@@ -422,7 +422,7 @@ export default function Home() {
       activeTab: true,
       activeSince: today
     } as Todo));
-    setTodos(prev => [...prev, ...newTodos]);
+    setTodos(prev => sortTodos([...prev, ...newTodos]));
     setIsImportModalOpen(false);
     setExtractedActionItems([]);
   };
@@ -1248,11 +1248,11 @@ export default function Home() {
   const completedTodos = todos.filter(t => t.completed).length;
 
 
-  const visibleTodos = sortTodos(todos.filter(t => {
+  const visibleTodos = todos.filter(t => {
     if (todoView === 'backburner') return !!t.backburner;
     if (todoView === 'active') return !t.backburner && !!t.activeTab;
     return !t.backburner && !t.activeTab;
-  }));
+  });
   const visibleCount = visibleTodos.length;
 
   const todoListSection = visibleCount === 0 ? null : (
